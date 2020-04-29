@@ -4,8 +4,9 @@
 
     below is the standard for variables names in ptools repo
         * stands for sth - any string
-
 """
+
+# ********************************************** general
 
 n_*     - number of *
 *L      - * list
@@ -25,3 +26,4 @@ n_*     - number of *
 # ******************************************* TensorFlow
 
 *_PH    - * placeholder
+*_vars  - list of variables

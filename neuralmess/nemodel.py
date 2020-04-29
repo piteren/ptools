@@ -68,7 +68,7 @@ class NEModel(dict):
             self,
             fwd_func,                               # function building forward graph (from PH to loss)
             mdict :dict or ParaDict,                # model parameters-arguments dictionary
-            # TODO: I'm not sure session can be given here, since we create tf.Graph for model below (graph should be given to session...)
+            # TODO: I'm not sure whether session can be given here, since we create tf.Graph for model below (graph should be given to session...)
             # I will lock this feature...
             # session :tf.Session=        None,       # session to use
             devices=                    -1,         # check neuralmess.dev_manager.ft_devices for details
