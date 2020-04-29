@@ -88,7 +88,7 @@ def _nice_results_str(
         name,
         search_RL,
         paspa):
-    results = f'Search run {name} finished, {len(search_RL)} results by smooth_score:\n\n{paspa}\n\n'
+    results = f'Search run {name} : {len(search_RL)} results by smooth_score:\n\n{paspa}\n\n'
     results += '  - smooth [local] id {params...} -\n'
     for sr in search_RL: results += f'{sr.smooth_score:9.5f} [{sr.score:9.5f}] {sr.id:4d}: {PaSpa.point_2str(sr.point)}\n'
     return results
@@ -111,7 +111,7 @@ def _write_graph(
         print('\nResults got data for axes:')
         for ix in range(len(columns)): print('  %d: %s'%(ix,columns[ix]))
         axes = ['x', 'y', 'z', 'c']
-        print('\nenter data for axes:')
+        print('\nenter data for axes (default 0,1,2,last):')
         for ix in range(4):
             ax = axes[ix]
             v = input('%s:'%ax)
@@ -187,7 +187,7 @@ def show_hpmser_resuls(
 
         search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
         _write_graph(name, search_RL, hpmser_FD, silent=False)
-        print(_nice_results_str(name, search_RL, paspa))
+        print(f'\n{_nice_results_str(name, search_RL, paspa)}')
 
 # hpms searching function
 def hpmser(
