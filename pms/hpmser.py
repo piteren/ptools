@@ -167,8 +167,7 @@ def _update_and_save(
     return search_RL
 
 # load results, show graph and save, print results
-def show_hpmser_resuls(
-        hpmser_FD :str):
+def show_hpmser_resuls(hpmser_FD :str):
 
     results_FDL = sorted(os.listdir(hpmser_FD))
     if len(results_FDL):
@@ -339,7 +338,7 @@ def hpmser(
 
     results = _nice_results_str(name, search_RL, paspa)
     if hpmser_FD:
-        with open( f'{hpmser_FD}/{name}_results.txt', 'w') as file: file.write(results)
+        with open( f'{hpmser_FD}/{name}/{name}_results.txt', 'w') as file: file.write(results)
 
     if verb>0: print(results)
 
