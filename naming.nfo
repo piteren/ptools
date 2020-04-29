@@ -1,0 +1,27 @@
+"""
+
+ 2020 (c) piteren
+
+    below is the standard for variables names in ptools repo
+    * stands for sth
+
+"""
+
+n_*     - number of *
+*L      - * list
+*IX     - * index
+*AV     - * average
+*F      - * factor (usually 0.0-1.0)
+*P      - * probability (0.0-1.0)
+
+
+# ************************************************ paths
+
+*_FD     - * folder
+*_FP     - * full path (relative or absolute)
+*_FN     - * filename
+
+
+# ******************************************* tensorflow
+
+*_PH    - * placeholder

@@ -1,0 +1,11 @@
+GPUtil
+Levenshtein
+matplotlib
+nltk
+numpy
+pandas
+plotly
+rouge
+scipy
+spacy
+tensorflow-gpu
