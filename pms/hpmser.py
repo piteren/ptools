@@ -27,7 +27,7 @@ import random
 import time
 from typing import Callable, List
 
-from ptools.lipytools.little_methods import stamp, w_pickle
+from ptools.lipytools.little_methods import stamp, w_pickle, r_pickle
 from ptools.pms.paspa import PaSpa
 from ptools.mpython.mpdecor import qproc
 
@@ -83,6 +83,67 @@ def _get_opt_sample(
     max_point = search_RL[0].point if search_RL and random.random() > space_prob else None
     return paspa.sample_point(max_point, ax_rrad)
 
+# prepares nice string of results
+def _nice_results_str(
+        name,
+        search_RL,
+        paspa):
+    results = f'Search run {name} finished, {len(search_RL)} results by smooth_score:\n\n{paspa}\n\n'
+    results += '  - smooth [local] id {params...} -\n'
+    for sr in search_RL: results += f'{sr.smooth_score:9.5f} [{sr.score:9.5f}] {sr.id:4d}: {PaSpa.point_2str(sr.point)}\n'
+    return results
+
+# writes 3D graph to html with plotly
+def _write_graph(
+        name,
+        search_RL :List[SeRes],
+        hpmser_FD :str,
+        silent=     True):
+
+    columns = sorted(list(search_RL[0].point.keys())) + ['score','smooth_score']
+    axes_data = {
+        'x':    columns[0],
+        'y':    columns[1],
+        'z':    columns[2],
+        'c':    columns[-1]}
+
+    if not silent:
+        print('\nResults got data for axes:')
+        for ix in range(len(columns)): print('  %d: %s'%(ix,columns[ix]))
+        axes = ['x', 'y', 'z', 'c']
+        print('\nenter data for axes:')
+        for ix in range(4):
+            ax = axes[ix]
+            v = input('%s:'%ax)
+            try:                v = int(v)
+            except ValueError:  v = None
+            if v is not None: axes_data[ax] = columns[v]
+
+    valLL = [[res.point[key] for key in columns[:-2]] + [res.score, res.smooth_score] for res in search_RL]
+    df = pd.DataFrame(
+        data=       valLL,
+        columns=    columns)
+    std = df[axes_data['c']].std()
+    mean = df[axes_data['c']].mean()
+    off = 2*std
+    cr_min = mean - off
+    cr_max = mean + off
+
+    fig = px.scatter_3d(
+        data_frame=     df,
+        title=          f'{name} {len(df[columns[0]])} results',
+        x=              axes_data['x'],
+        y=              axes_data['y'],
+        z=              axes_data['z'],
+        color=          axes_data['c'],
+        range_color=    [cr_min,cr_max],
+        opacity=        0.7,
+        width=          700,
+        height=         700)
+
+    file = f'{hpmser_FD}/{name}/{name}_results.html'
+    fig.write_html(file, auto_open=False if os.path.isfile(file) else True)
+
 # updates list, sorts, writes
 def _update_and_save(
         name,
@@ -90,83 +151,59 @@ def _update_and_save(
         paspa :PaSpa,
         rad :float,
         new_SR :SeRes or List[SeRes]=   None,
-        save_FD :str=                   None):
-
-    # writes 3D graph to html with plotly
-    def write_graph(
-            search_RL :List[SeRes],
-            save_FD :str,
-            silent= True):
-
-        columns = sorted(list(search_RL[0].point.keys())) + ['score','smooth_score']
-        axes_data = {
-            'x':    columns[0],
-            'y':    columns[1],
-            'z':    columns[2],
-            'c':    columns[-1]}
-
-        if not silent:
-            print('\nResults got data for axes:')
-            for ix in range(len(columns)): print('  %d: %s'%(ix,columns[ix]))
-            axes = ['x', 'y', 'z', 'c']
-            print('\nenter data for axes:')
-            for ix in range(4):
-                ax = axes[ix]
-                v = input('%s:'%ax)
-                try:                v = int(v)
-                except ValueError:  v = None
-                if v is not None: axes_data[ax] = columns[v]
-
-        valLL = [[res.point[key] for key in columns[:-2]] + [res.score, res.smooth_score] for res in search_RL]
-        df = pd.DataFrame(
-            data=       valLL,
-            columns=    columns)
-        std = df[axes_data['c']].std()
-        mean = df[axes_data['c']].mean()
-        off = 2*std
-        cr_min = mean - off
-        cr_max = mean + off
-
-        fig = px.scatter_3d(
-            data_frame=     df,
-            title=          f'{name} {len(df[columns[0]])} results',
-            x=              axes_data['x'],
-            y=              axes_data['y'],
-            z=              axes_data['z'],
-            color=          axes_data['c'],
-            range_color=    [cr_min,cr_max],
-            opacity=        0.7,
-            width=          700,
-            height=         700)
-
-        file = f'{save_FD}/{name}_results.html'
-        fig.write_html(file, auto_open=False if os.path.isfile(file) else True)
+        hpmser_FD :str=                 None):
 
     if new_SR:
         if type(new_SR) is not list: new_SR = [new_SR]
         search_RL += new_SR
     _smooth_RL(search_RL, paspa, rad)  # update smooth
     search_RL = sorted(search_RL, key=lambda x: x.smooth_score, reverse=True)  # sort
-    if save_FD:
-        w_pickle((search_RL, paspa), f'{save_FD}/{name}_results.srl')
-        write_graph(search_RL, save_FD)
+    if hpmser_FD:
+        w_pickle((search_RL, paspa), f'{hpmser_FD}/{name}/{name}_results.srl')
+        _write_graph(
+            name=       name,
+            search_RL=  search_RL,
+            hpmser_FD=  hpmser_FD)
     return search_RL
+
+# load results, show graph and save, print results
+def show_hpmser_resuls(
+        hpmser_FD :str):
+
+    results_FDL = sorted(os.listdir(hpmser_FD))
+    if len(results_FDL):
+        rIX = -1
+        if len(results_FDL) > 1:
+            print(f'\nThere are {len(results_FDL)} searches, choose one (default last):')
+            for ix in range(len(results_FDL)):
+                print(f' > {ix:2d}: {results_FDL[ix]}')
+            rIX = input('> ')
+            try:
+                rIX = int(rIX)
+                if rIX > len(results_FDL): rIX = -1
+            except ValueError:
+                rIX = -1
+        name = results_FDL[rIX]
+
+        search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
+        _write_graph(name, search_RL, hpmser_FD, silent=False)
+        print(_nice_results_str(name, search_RL, paspa))
 
 # hpms searching function
 def hpmser(
-        func :Callable,                 # function which parameters need to be optimized
-        psd :dict,                      # dictionary defining the space of parameters
-        name :str=              None,   # for None stamp will be used
-        rad :float=             0.5,    # radius for smoothing
-        ax_rrad :float=         0.3,    # relative distance on axis of space for sampling, should be < 1
-        space_prob :float=      0.5,    # probability of sampling whole space (exploration)
-        def_kwargs :dict=       None,   # func kwargs
-        devices=                None,   # devices to use for search
-        use_all_cores=          True,   # True: when devices is None >> uses all cores, otherwise as set by devices
-        subprocess=             True,   # True: runs func in subprocesses, otherwise in this process
-        n_loops=                None,   # limit for number of search loops
-        save_FD :str or bool=   None,   # folder, where save search results and html, for None does not save, for True uses default
-        verb=                   1):
+        func :Callable,                     # function which parameters need to be optimized
+        psd :dict,                          # dictionary defining the space of parameters
+        name :str=                  None,   # for None stamp will be used
+        rad :float=                 0.5,    # radius for smoothing
+        ax_rrad :float=             0.3,    # relative distance on axis of space for sampling, should be < 1
+        space_prob :float=          0.5,    # probability of sampling whole space (exploration)
+        def_kwargs :dict=           None,   # func kwargs
+        devices=                    None,   # devices to use for search
+        use_all_cores=              True,   # True: when devices is None >> uses all cores, otherwise as set by devices
+        subprocess=                 True,   # True: runs func in subprocesses, otherwise in this process
+        n_loops=                    None,   # limit for number of search loops
+        hpmser_FD : str or bool=    None,   # folder, where save search results and html, for None does not save, for True uses default
+        verb=                       1):
 
     if not name: name = stamp()
     if verb > 0:
@@ -179,12 +216,11 @@ def hpmser(
         verb=   verb-1)
     if verb>0: print(f'\n{paspa}\n')
 
-    # set folders
-    if save_FD:
-        if save_FD is True: save_FD = 'hpmser'
-        if not os.path.isdir(save_FD): os.mkdir(save_FD)
-        save_FD = f'{save_FD}/{name}'
-        os.mkdir(save_FD)
+    # set folders, create if needed
+    if hpmser_FD:
+        if hpmser_FD is True: hpmser_FD = 'hpmser'
+        if not os.path.isdir(hpmser_FD): os.mkdir(hpmser_FD)
+        os.mkdir(f'{hpmser_FD}/{name}')
 
     # manage devices
     if not subprocess: use_all_cores = False
@@ -283,7 +319,7 @@ def hpmser(
                     paspa=      paspa,
                     rad=        rad,
                     new_SR=     new_SRL,
-                    save_FD=    save_FD)
+                    hpmser_FD=  hpmser_FD)
 
             max_SR = search_RL[0]
 
@@ -299,12 +335,11 @@ def hpmser(
         search_RL=  search_RL,
         paspa=      paspa,
         rad=        rad,
-        save_FD=    save_FD)
+        hpmser_FD=  hpmser_FD)
 
-    results = f'Search run {name} finished, {len(search_RL)} results by smooth_score:\n\n{paspa}\n\n'
-    for sr in search_RL: results += f'{sr.smooth_score:8.5f}/{sr.score:8.5f} ({sr.id:3d}) {PaSpa.point_2str(sr.point)}\n'
-    if save_FD:
-        with open( f'{save_FD}/{name}_results.txt', 'w') as file: file.write(results)
+    results = _nice_results_str(name, search_RL, paspa)
+    if hpmser_FD:
+        with open( f'{hpmser_FD}/{name}_results.txt', 'w') as file: file.write(results)
 
     if verb>0: print(results)
 
@@ -324,17 +359,21 @@ def example_hpmser(
             device,
             a :int,
             b :float,
+            c: float,
+            d: float,
             wait=   0.1,
             verb=   0):
 
-        val = math.sin(b-a) - abs(a+3.1)/2 - pow(b/2,2)/12
+        val = math.sin(b-a*c) - abs(a+3.1)/(d+0.5) - pow(b/2,2)/12
         time.sleep(random.random()*wait)
         if verb>0 :print(f'... {name} calculated on {device} ({a}) ({b}) >> ({val})')
         return val
 
     psd = {
-        'a':    [-10,5],
-        'b':    [-5.0,5.0]}
+        'a':    [-5,5],
+        'b':    [-5.0,5.0],
+        'c':    [-2.0,2],
+        'd':    [0.0,5]}
 
     hpmser(
         func=       some_func,
@@ -345,10 +384,11 @@ def example_hpmser(
         def_kwargs= {'name':'pio', 'a':3, 'wait':av_time*2, 'verb':verb-1},
         devices=    [None]*n_proc,
         #subprocess= False,
-        save_FD=    'test',
+        hpmser_FD=  True,
         verb=       verb)
 
 
 if __name__ == '__main__':
 
-    example_hpmser()
+    #example_hpmser()
+    show_hpmser_resuls('hpmser')

@@ -167,7 +167,7 @@ class PaSpa:
     def __str__(self):
         info = '*** PaSpa *** parameters space:\n'
         for param in sorted(list(self.psd.keys())):
-            info += f' > {param}: {self.psd[param]}\n      {self.psd_T[param]}, width: {self.psd_W[param]}\n'
+            info += f' > {param:20s} {str(self.psd[param]):20s} {self.psd_T[param]+",":12s} width: {self.psd_W[param]}\n'
         return info[:-1]
 
 
