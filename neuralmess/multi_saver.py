@@ -93,9 +93,9 @@ class MultiSaver:
     # loads last checkpoint of given saver
     def load(
             self,
-            saver=                  None,
-            session :tf.Session=    None,
-            allow_init=             True):
+            saver=                          None,
+            session :tf.compat.v1.Session=  None,
+            allow_init=                     True):
 
         if not session: session = self.session
         if self.verb > 0: print()

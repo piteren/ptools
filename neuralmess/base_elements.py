@@ -103,7 +103,7 @@ def grad_clipper_AVT(
 
 # gradient clipping loss reductor (gradient clipping + optimizer) (wraps grad_clipper_AVT)
 def gc_loss_reductor(
-        optimizer :tf.train.Optimizer,
+        optimizer :tf.compat.v1.train.Optimizer,
         vars :list=     None,
         g_step=         None,       # put here globalStep variable to update +1 with optimizer
         avg_loss=       None,       # put here loss if you do not have gradients yet
@@ -287,9 +287,9 @@ class ZeroesProcessor:
 
     def __init__(
             self,
-            intervals :tuple=                   (50,500,5000),
-            tag_pfx=                            'nane', # prefix of tag in TB
-            summ_writer :tf.summary.FileWriter= None):  # if given will put summaries to TB with intervals frequencies
+            intervals :tuple=   (50,500,5000),
+            tag_pfx=            'nane', # prefix of tag in TB
+            summ_writer :tf.compat.v1.summary.FileWriter=   None):  # if given will put summaries to TB with intervals frequencies
 
         self.intervals = intervals
         self.zsL = {k: [] for k in self.intervals}

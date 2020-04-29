@@ -45,8 +45,8 @@ def lay_DRT(
 
         # activation
         output = activation(output)
+        zsL = [zeroes(output)]  # zeroes list
         hist_summ.append(tf.summary.histogram('c_activation', output, family=hist_name))
-        zsL = [zeroes(output)] # zeroes list
 
         # dense (scale down) no activ
         output = lay_dense(
@@ -252,8 +252,8 @@ def enc_CNN(
                 # activation
                 if activation:
                     output = activation(output)
+                    zsL += [zeroes(output)]  # catch zeroes
                     if hist_lay: hist_summ.append(tf.summary.histogram('d_activation', output, family=name))
-                    zsL += zeroes(output) # catch zeroes
 
                 # dropout
                 if lay_drop:
@@ -282,8 +282,8 @@ def enc_CNN(
                         initializer=    initializer,
                         seed=           seed)
                     output = lay_out['output']
-                    if hist_lay: hist_summ.append(lay_out['hist_summ'])
                     zsL += lay_out['zeroes']
+                    if hist_lay: hist_summ.append(lay_out['hist_summ'])
 
                 sub_output = output
 
@@ -547,7 +547,7 @@ def enc_TNS(
             activation=     activation,
             initializer=    initializer,
             seed=           seed)
-        zsL =  zeroes(output)
+        zsL =  [zeroes(output)]
         hist_summ.append(tf.summary.histogram('g_1denseOut', output, family=name))
         output = lay_dense(
             input=          output,

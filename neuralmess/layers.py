@@ -49,18 +49,19 @@ def lay_res(
 
     return output
 
-# returns tensor with 1 where input not activated over whole batch,seq... (nane - Not Activated NEurons)
+# returns [0,1] tensor: 1 where input not activated over whole batch, seq... (nane - Not Activated NEurons)
 # we assume that value =< 0 means: not activated
 # we check over all axes but last (feats)
 def zeroes(input :tf.Tensor) -> List[tf.Tensor]:
-    axes = [ix for ix in range(len(input.shape))][:-1] # axes all but last(feats) axes list
-    nn_zeros = tf.where( # puts 1 for value greater than zero
+    axes = [ix for ix in range(len(input.shape))][:-1]      # axes all but last(feats) axes list
+    activated = tf.where(                                   # 1 for value greater than zero, other 0
         condition=  tf.math.greater(input, 0),
-        x=          tf.ones_like(input),    # true
-        y=          tf.zeros_like(input))   # false
-    nn_zeros = tf.reduce_sum(nn_zeros, axis=axes)  # has 1 or more for activated and 0 for not activated
-    nn_zeros = tf.cast(tf.equal(nn_zeros, 0), dtype=tf.int8)  # puts 1 where summed gives zero
-    return [nn_zeros]
+        x=          tf.ones_like(input), # true
+        y=          tf.zeros_like(input)) # false
+    activated_reduced = tf.reduce_sum(activated, axis=axes) #1 or more for activated, 0 for not activated
+    not_activated = tf.equal(activated_reduced, 0)          # true where summed gives zero (~invert)
+    nn_zeros = tf.cast(not_activated, dtype=tf.int8)        # cast to 1 where summed gives zero
+    return nn_zeros
 
 # dense layer
 def lay_dense(
