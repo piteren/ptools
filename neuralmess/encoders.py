@@ -86,17 +86,18 @@ def lay_DRT(
 # Deep Residual encoder
 def enc_DRT(
         input,
-        name=           'enc_DRT',
-        n_layers=       12,
-        lay_width :int= None,       # for None matches input width
-        dns_scale=      6,          # scale(*) of first dense
-        activation=     tf.nn.relu,     # gelu is really worth a try
-        dropout=        0.0,        # dropout after two denses
-        training_flag=  None,       # training flag tensor (for dropout)
-        initializer=    None,
-        seed=           12321,
-        n_hist=         4,          # number of histogram layers (for TB)
-        verb=           0):
+        name=               'enc_DRT',
+        shared_lays :bool=  False,      # shared variables in enc_layers
+        n_layers=           12,
+        lay_width :int=     None,       # for None matches input width
+        dns_scale=          6,          # scale(*) of first dense
+        activation=         tf.nn.relu,     # gelu is really worth a try
+        dropout=            0.0,        # dropout after two denses
+        training_flag=      None,       # training flag tensor (for dropout)
+        initializer=        None,
+        seed=               12321,
+        n_hist=             4,          # number of histogram layers (for TB)
+        verb=               0):
 
     lay_width_matched = ''
     if lay_width is None:
@@ -133,9 +134,10 @@ def enc_DRT(
         output = input # for 0 layers case
         for nL in range(n_layers):
 
+            lay_name = f'DRLay_{nL}' if not shared_lays else 'DRLay_shared'
             lay_out = lay_DRT(
                 input=          output,
-                name=           f'DRLay_{nL}',
+                name=           lay_name,
                 hist_name=      name,
                 dns_scale=      dns_scale,
                 activation=     activation,
@@ -158,14 +160,21 @@ def enc_CNN(
         input :tf.Tensor,
         history :tf.Tensor=                 None,       # optional history(state) tensor with shape [bsz, n_layers ,kernel-1, n_filters], >> masked cnn
         name=                               'enc_CNN',
-        shared_lays :bool=                  False,      # shared variables in layers
+        # layer params
+        shared_lays :bool=                  False,      # shared variables in enc_layers
         n_layers :int=                      12,         # num of layers
         kernel :int=                        3,          # layer kernel
         n_filters :int=                     128,        # num of filters
-        dns_scale :int or None=             0,          # scale(*) of first dense for lay_DRT after CNN, for None or 0 DRT won't be build
-        activation=                         tf.nn.relu, # gelu is really worth a try
-        dropout :float or None=             0.0,
-        dropout_drt :float or None=         0.0,
+        activation=                         tf.nn.relu, # global enc activation func, gelu is really worth a try
+        lay_drop : float or None=           0.0,
+        ldrt_scale : int or None=           0,          # DRT @enc_lay - scale(*) of first dense, for None or 0 DRT @lay won't be build
+        ldrt_drop : float or None=          0.0,        # DRT @enc_lay - dropout
+        # DRT after enc
+        drt_shared :bool=                   False,      # shared variables in enc_layers
+        drt_nlays :int=                     0,
+        drt_scale :int or None=             4,
+        drt_drop : float or None=           0.0,
+        # other
         training_flag :tf.Tensor or bool=   None,       # dropout training flag tensor
         initializer=                        None,
         seed :int=                          12321,
@@ -247,10 +256,10 @@ def enc_CNN(
                     zsL += zeroes(output) # catch zeroes
 
                 # dropout
-                if dropout:
+                if lay_drop:
                     output = tf.layers.dropout(
                         inputs=     output,
-                        rate=       dropout,
+                        rate=       lay_drop,
                         training=   training_flag,
                         seed=       seed)
                     if hist_lay: hist_summ.append(tf.summary.histogram('e_drop', output, family=name))
@@ -261,14 +270,14 @@ def enc_CNN(
 
                 if verb > 1: print(f' > output (layer): {output}')
 
-                if dns_scale:
+                if ldrt_scale:
                     lay_out = lay_DRT(
                         input=          output,
                         name=           lay_name + '_lay_DRT',
                         hist_name=      name,
-                        dns_scale=      dns_scale,
+                        dns_scale=      ldrt_scale,
                         activation=     activation,
-                        dropout=        dropout_drt,
+                        dropout=        ldrt_drop,
                         training_flag=  training_flag,
                         initializer=    initializer,
                         seed=           seed)
@@ -283,6 +292,21 @@ def enc_CNN(
         inputs=             output,
         begin_norm_axis=    -1,
         begin_params_axis=  -1)
+
+    if drt_nlays:
+        output = enc_DRT(
+                input=          output,
+                name=           'drt_after_enc',
+                shared_lays=    drt_shared,
+                n_layers=       drt_nlays,
+                dns_scale=      drt_scale,
+                activation=     activation,
+                dropout=        drt_drop,
+                training_flag=  training_flag,
+                initializer=    initializer,
+                seed=           seed,
+                n_hist=         n_hist,  # number of histogram layers (for TB)
+                verb=           0)
 
     # prepare fin_state
     fin_state = None
