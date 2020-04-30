@@ -8,4 +8,4 @@ plotly
 rouge
 scipy
 spacy
-tensorflow-gpu==1.15
+tensorflow-gpu==1.15.2
