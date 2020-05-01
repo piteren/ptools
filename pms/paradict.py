@@ -27,25 +27,25 @@ class ParaDict(dict):
 
         if verb > 0: print('\n*** ParaDict *** inits...')
 
-    # updates values of self keys with subdct but all keys from subdct MUST BE PRESENT in self
+    # updates values of self keys with subdct but ALL keys from subdct MUST BE PRESENT in self
     def refresh(
             self,
             subdct :dict):
 
         for key in subdct:
-            assert key in self, 'ERR: key \'%s\' from refresher not present in params dict'%key
+            assert key in self, f'ERR: key \'{key}\' from refresher not present in params dict'
         self.update(subdct)
 
-    # updates values of self keys with subdct but only for those keys ALREADY PRESENT in self
-    def update_values(
+    # updates values of self keys with subdct but ONLY for keys ALREADY PRESENT in self
+    def update_present(
             self,
             subdct :dict):
 
         for key in subdct:
             if key in self: self[key] = subdct[key]
 
-    # extends self keys with new subdct keys
-    def add(
+    # extends self keys ONLY with NEW subdct keys
+    def add_new(
             self,
             subdct :dict,
             check_pmss=   True):
@@ -55,7 +55,7 @@ class ParaDict(dict):
             if key not in self:
                 self[key] = subdct[key]
 
-    # checks for params similarity
+    # checks for params similarity, returns True if got similar
     def check_params_sim(
             self,
             params :dict or list,
@@ -91,6 +91,8 @@ class ParaDict(dict):
                         print('\nParaDict was asked to check for params similarity and found:')
                         found_any = True
                     print(f' @@@ ### >>> ACHTUNG: keys \'{p_key}\' and \'{s_key}\' are CLOSE !!!')
+
+        return found_any
 
     # returns deepcopy of self dict
     def get_dict_copy(self): return copy.deepcopy(self)

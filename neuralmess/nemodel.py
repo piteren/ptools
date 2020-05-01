@@ -102,9 +102,7 @@ class NEModel(dict):
         self.verb = verb
         if self.verb > 0: print('\n*** NEModel *** initializes...')
 
-        self.mdict = ParaDict({}) # empty ParaDict
-
-        self_args_dict = { # model dict with params from constructor
+        self_args_dict = { # dict with params from constructor
             'name':         name,
             'seed':         seed,
             'opt_class':    opt_class,
@@ -117,13 +115,14 @@ class NEModel(dict):
             'avt_window':   avt_window,
             'avt_max_upd':  avt_max_upd,
             'do_clip':      do_clip}
+
         fwdf_mdict = get_defaults(function=fwd_func) # defaults of fwd_func
 
         # resolve model name (extend with timestamp when needed)
-        resolved_name = self_args_dict['name']
-        if 'name' in fwdf_mdict:    resolved_name = fwdf_mdict['name']
-        if 'name' in mdict:         resolved_name = mdict['name']
-        if name_timestamp:          resolved_name += '.' + stamp()
+        resolved_name =                                 self_args_dict['name']
+        if 'name' in fwdf_mdict:    resolved_name =     fwdf_mdict['name']
+        if 'name' in mdict:         resolved_name =     mdict['name']
+        if name_timestamp:          resolved_name +=    '.' + stamp()
         if self.verb > 0: print(' > NEModel name: %s'%resolved_name)
 
         # model folder and logger
@@ -137,9 +136,9 @@ class NEModel(dict):
         if not file_mdict: file_mdict = {}
         elif self.verb > 0: print(' > loaded model dict from file: %s' % self.md_file)
 
-        self.mdict.add(fwdf_mdict)          # add(init) defaults of fwd_func
+        self.mdict = ParaDict(fwdf_mdict)   # ParaDict with defaults of fwd_func
         self.mdict.update(file_mdict)       # update(override) with file dict
-        self.mdict.add(self_args_dict)      # add(those not present) self_args_dict
+        self.mdict.add_new(self_args_dict)  # add new from self_args_dict (extends)
         self.mdict.update(mdict)            # update with mdict
         self.mdict['name'] = resolved_name  # finally override name
         if do_opt and not self.mdict['opt_class']: self.mdict['opt_class'] = tf.train.AdamOptimizer # default optimizer
