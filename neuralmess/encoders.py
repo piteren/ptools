@@ -294,19 +294,21 @@ def enc_CNN(
         begin_params_axis=  -1)
 
     if drt_nlays:
-        output = enc_DRT(
-                input=          output,
-                name=           'drt_after_enc',
-                shared_lays=    drt_shared,
-                n_layers=       drt_nlays,
-                dns_scale=      drt_scale,
-                activation=     activation,
-                dropout=        drt_drop,
-                training_flag=  training_flag,
-                initializer=    initializer,
-                seed=           seed,
-                n_hist=         n_hist,  # number of histogram layers (for TB)
-                verb=           0)
+        eout = enc_DRT(
+            input=          output,
+            name=           'drt_after_enc',
+            shared_lays=    drt_shared,
+            n_layers=       drt_nlays,
+            dns_scale=      drt_scale,
+            activation=     activation,
+            dropout=        drt_drop,
+            training_flag=  training_flag,
+            initializer=    initializer,
+            seed=           seed,
+            n_hist=         n_hist,  # number of histogram layers (for TB)
+            verb=           0)
+        output = eout['output']
+        zsL += eout['zeroes']
 
     # prepare fin_state
     fin_state = None

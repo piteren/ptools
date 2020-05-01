@@ -193,6 +193,7 @@ def hpmser(
         func :Callable,                     # function which parameters need to be optimized
         psd :dict,                          # dictionary defining the space of parameters
         name :str=                  None,   # for None stamp will be used
+        add_stamp=                  True,   # adds short stamp to name, when name given
         rad :float=                 0.5,    # radius for smoothing
         ax_rrad :float=             0.3,    # relative distance on axis of space for sampling, should be < 1
         space_prob :float=          0.5,    # probability of sampling whole space (exploration)
@@ -205,6 +206,7 @@ def hpmser(
         verb=                       1):
 
     if not name: name = stamp()
+    elif add_stamp: name = f'{name}_{stamp(letters=0)}'
     if verb > 0:
         print(f'\n*** hpmser *** {name} started for {func.__name__} ...')
         print(f'    rad {rad}, ax_rrad {ax_rrad}, space_prob {space_prob}')

@@ -26,11 +26,11 @@ def args(verb):
             no_val = '--'
 
             arL = ins.args
-            if arL[0] == 'self': arL = arL[1:]              # simple, BUT not 100% accurate, ...but who names param 'self'?
+            if arL[0] == 'self': arL = arL[1:]                  # simple, BUT not 100% accurate, ...but who names param 'self'?
 
-            defL = list(ins.defaults)                       # list of default values
-            defL = [no_val]*(len(arL)-len(defL)) + defL     # pad them with no_val
-            arL = [list(e) for e in zip(arL,defL)]          # zip together
+            defL = list(ins.defaults) if ins.defaults else []   # list of default values
+            defL = [no_val]*(len(arL)-len(defL)) + defL         # pad them with no_val
+            arL = [list(e) for e in zip(arL,defL)]              # zip together
 
             # append args from the beginning
             if args:
@@ -39,7 +39,7 @@ def args(verb):
                     v = arvL[ix]
                     arL[ix].append(v)
 
-            kwL = [[k,kwargs[k]] for k in kwargs]           # kwargs in list
+            kwL = [[k,kwargs[k]] for k in kwargs]               # kwargs in list
 
             # get from kwargs params of f, append their values and remove from kwargs
             kremIXL = []
@@ -89,7 +89,7 @@ def args(verb):
                 print(f' > {"param":{str(kw[0])}s}  {"default":{str(kw[1])}s}  {"given":{str(kw[2])}s}')
                 for e in arL:
                     print(f'   {s(e[0]):{str(kw[0])}s}  {s(e[1]):{str(kw[1])}s}  {s(e[2]):{str(kw[2])}s}')
-                print(f' > **kwargs (not used by {f.__name__}):')
+                if kwL: print(f' > **kwargs (not used by {f.__name__}):')
                 for e in kwL:
                     print(f'   {s(e[0]):{str(kw[0])}s}  {"":{str(kw[1])}s}  {s(e[1]):{str(kw[2])}s}')
                 print('@args report finished *********************************************************************************\n')
