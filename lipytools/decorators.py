@@ -13,11 +13,13 @@ import time
 def timing(f):
     def new_f(*args, **kwargs):
         stime = time.time()
-        f(*args, **kwargs)
+        ret = f(*args, **kwargs)
         print(f'(@timing) {f.__name__} finished, taken {time.time() - stime:.1f}sec')
+        return ret
     new_f.__name__ = f'{f.__name__}:@timing'
     return new_f
 
+# TODO: test on method_no_args etc...
 # prints debug info about parameters and given args/kwargs of function/method, verb must be > 0 to print, if f got verb it overrides
 def args(verb):
     def wrap(f):
@@ -94,7 +96,7 @@ def args(verb):
                     print(f'   {s(e[0]):{str(kw[0])}s}  {"":{str(kw[1])}s}  {s(e[1]):{str(kw[2])}s}')
                 print('@args report finished *********************************************************************************\n')
 
-            f(*args, **kwargs)
+            return f(*args, **kwargs)
 
         new_f.__name__ = f'{f.__name__}:@args'
         return new_f

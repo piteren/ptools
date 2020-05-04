@@ -206,7 +206,7 @@ def hpmser(
         verb=                       1):
 
     if not name: name = stamp()
-    elif add_stamp: name = f'{name}_{stamp(letters=0)}'
+    elif add_stamp: name = f'{stamp(letters=0)}_{name}'
     if verb > 0:
         print(f'\n*** hpmser *** {name} started for {func.__name__} ...')
         print(f'    rad {rad}, ax_rrad {ax_rrad}, space_prob {space_prob}')
