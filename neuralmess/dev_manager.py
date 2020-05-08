@@ -57,9 +57,8 @@ def tf_devices(
     for 1-5 masks cuda devices
     for OSX returns CPU only
     """
-
-    if platform.system() == 'Darwin':
-        print('device_TF: OSX does not support GPUs >> using only CPU')
+    if platform.system() == 'Darwin' or not GPUtil.getGPUs():
+        print('no GPUs available, using only CPU')
         num = len(devices) if type(devices) is list and devices else 1
         devices = ['/device:CPU:0']*num
     # TODO: handle: no-GPU system >> devices=None or ^ ['/device:CPU:0']*num

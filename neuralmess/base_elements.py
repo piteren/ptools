@@ -208,9 +208,19 @@ def log_checkpoint(ckpt_FD):
     for _, shape in ckpt_vars:
         tot_siz += sh_size(shape)
     print('\nGot %d variables in original checkpoint (total size %d nums)'%(len(ckpt_vars),tot_siz))
+
+    max_nm_len = 0
+    max_sh_len = 0
+    for var_name, shape in ckpt_vars:
+        if len(var_name) > max_nm_len:   max_nm_len = len(var_name)
+        if len(str(shape)) > max_sh_len: max_sh_len = len(str(shape))
+    if max_nm_len > 90: max_nm_len = 90
+    if max_sh_len > 20: max_sh_len = 20
+
     for var_name, shape in ckpt_vars:
         var = tf.contrib.framework.load_variable(ckpt_FD, var_name)
-        print(' > (%4.1f%%) %50s %25s %s'%(100*sh_size(shape)/tot_siz,var_name,shape,var.dtype))
+        print(f' > ({100*sh_size(shape)/tot_siz:4.1f}%) {var_name:{max_nm_len}s} {str(shape):{max_sh_len}s} {var.dtype}')
+        #print(' > (%4.1f%%) %-50s %25s %s'%(100*sh_size(shape)/tot_siz, var_name, shape, var.dtype))
 
 # weighted merge of two checkpoints
 def mrg_ckpts(
