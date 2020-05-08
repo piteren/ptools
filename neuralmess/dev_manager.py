@@ -58,7 +58,7 @@ def tf_devices(
     for OSX returns CPU only
     """
     if platform.system() == 'Darwin' or not GPUtil.getGPUs():
-        print('no GPUs available, using only CPU')
+        print('no GPUs available >> using only CPU')
         num = len(devices) if type(devices) is list and devices else 1
         devices = ['/device:CPU:0']*num
     # TODO: handle: no-GPU system >> devices=None or ^ ['/device:CPU:0']*num
