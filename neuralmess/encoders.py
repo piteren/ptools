@@ -2,13 +2,16 @@
 
  2019 (c) piteren
 
+    some encoders
+
 """
 
 import tensorflow as tf
-from tensorflow.contrib import rnn
 
 from ptools.neuralmess.base_elements import my_initializer, list_of_layers
 from ptools.neuralmess.layers import lay_res, zeroes, lay_dense, lay_conv1D, attn
+
+# TODO: probably in tf 1.15.2 histogram 'family=' should be replaced with 'description=' << check it on histogram case
 
 
 # single DRT layer, base of enc_DRT (based on some Transformer concepts)
@@ -325,84 +328,11 @@ def enc_CNN(
         'hist_summ':    hist_summ,
         'zeroes':       zsL}
 
-# rnn encoder(for sequence encoding)
-def enc_RNN(
-        input,
-        name=           'enc_RNN',
-        cellFN=         rnn.NASCell,    # cell function (GRUCell NASCell LSTMCell)
-        biDir=          True,
-        cellWidth=      64,
-        numLays=        1,
-        dropout=        0,
-        dropFlagT=      None,       # dropout training flag tensor
-        seed=           12321,
-        n_hist=         4,              # number of histogram layers
-        verb=           0):
-    """
-    bidirectional rnn encoder (wRES)
-    number of parameters for LSTMcell:  8c(e+c+1)
-    number of parameters for NAScell:   16c(e+c)
-    """
-
-    histSumm = []
-    histLayers = list_of_layers(numLays, n_select=n_hist)
-    if verb > 0: print('histogram layers of rnnEncoder:', histLayers)
-
-    with tf.variable_scope(name):
-        if verb > 0: print('building RNNencoder...')
-
-        fCells = [cellFN(cellWidth) for _ in range(numLays)]
-        bCells = [cellFN(cellWidth) for _ in range(numLays)] if biDir else None
-
-        layIN = input
-        for lay in range(len(fCells)):
-
-            histLay = lay in histLayers
-            layName = 'rnnEncLay_%s' % lay
-            with tf.variable_scope(layName):
-
-                if biDir:
-                    # bidirectional rnn layer
-                    layOUT, _ = tf.nn.bidirectional_dynamic_rnn(
-                        cell_fw=    fCells[lay],
-                        cell_bw=    bCells[lay],
-                        inputs=     layIN,
-                        dtype=      tf.float32)
-                    layOUT = tf.concat(layOUT, -1)
-
-                else:
-                    # f direction rnn
-                    layOUT, _ = tf.nn.dynamic_rnn(
-                        cell=       fCells[lay],
-                        inputs=     layIN,
-                        dtype=      tf.float32)
-
-                if histLay: histSumm.append(tf.summary.histogram('a_rnnOut', layOUT, family='tensor'))
-
-                # residual connection
-                layOUT = lay_res(layIN, layOUT)
-                if histLay: histSumm.append(tf.summary.histogram('b_residual', layOUT, family='tensor'))
-
-                # dropout
-                if dropout:
-                    layOUT = tf.layers.dropout(
-                        inputs=     layOUT,
-                        rate=       dropout,
-                        training=   dropFlagT,
-                        seed=       seed)
-                    if histLay: histSumm.append(tf.summary.histogram('c_dropOut', layOUT, family=name))
-
-                layIN = layOUT
-
-    return {
-        'output':   layOUT,
-        'histSumm': histSumm}
-
 # transformer encoder
 def enc_TNS(
         in_seq,                                 # input sequence embeddings [batch, seq, emb], for TAT in_seq should be LNormalized
         name=                       'enc_TNS',
-        seq_out :bool=              True,       # transformer seq2seq, if False seq2one (Task Attention)
+        seq_out :bool=              True,       # transformer seq2seq, if False seq2one (Task Attention Transformer)
         add_PE :bool=               True,       # add positional embeddings
         do_LN :bool=                True,       # do layer norm
         n_blocks=                   12,

@@ -27,6 +27,7 @@ import random
 import time
 from typing import Callable, List
 
+from ptools.lipytools.decorators import timing
 from ptools.lipytools.little_methods import stamp, w_pickle, r_pickle
 from ptools.pms.paspa import PaSpa
 from ptools.mpython.mpdecor import qproc
@@ -189,6 +190,7 @@ def show_hpmser_resuls(hpmser_FD :str):
         print(f'\n{_nice_results_str(name, search_RL, paspa)}')
 
 # hpms searching function
+@timing
 def hpmser(
         func :Callable,                     # function which parameters need to be optimized
         psd :dict,                          # dictionary defining the space of parameters
