@@ -172,11 +172,6 @@ def enc_CNN(
         lay_drop : float or None=           0.0,
         ldrt_scale : int or None=           0,          # DRT @enc_lay - scale(*) of first dense, for None or 0 DRT @lay won't be build
         ldrt_drop : float or None=          0.0,        # DRT @enc_lay - dropout
-        # DRT after enc
-        #drt_shared :bool=                   False,      # shared variables in enc_layers
-        #drt_nlays :int=                     0,
-        #drt_scale :int or None=             4,
-        #drt_drop : float or None=           0.0,
         # other
         training_flag :tf.Tensor or bool=   None,       # dropout training flag tensor
         initializer=                        None,
@@ -296,25 +291,6 @@ def enc_CNN(
         begin_norm_axis=    -1,
         begin_params_axis=  -1)
 
-    """
-    if drt_nlays:
-        eout = enc_DRT(
-            input=          output,
-            name=           'drt_after_enc',
-            shared_lays=    drt_shared,
-            n_layers=       drt_nlays,
-            dns_scale=      drt_scale,
-            activation=     activation,
-            dropout=        drt_drop,
-            training_flag=  training_flag,
-            initializer=    initializer,
-            seed=           seed,
-            n_hist=         n_hist,  # number of histogram layers (for TB)
-            verb=           0)
-        output = eout['output']
-        zsL += eout['zeroes']
-    """
-
     # prepare fin_state
     fin_state = None
     if history is not None:
@@ -337,6 +313,7 @@ def enc_TNS(
         seq_out :bool=              True,       # transformer seq2seq, if False seq2one (Task Attention Transformer)
         add_PE :bool=               True,       # add positional embeddings
         do_LN :bool=                True,       # do layer norm
+        shared_lays :bool=          False,      # shared variables in blocks
         n_blocks=                   12,
         n_heads=                    8,
         dense_mul :int or float=    4,          # dense (after att) scale
@@ -548,7 +525,8 @@ def enc_TNS(
         block_output = None
         for nB in range(n_blocks):
             hist_lay = nB in hist_layers
-            with tf.variable_scope('block_%d' % nB):
+            lay_name = f'block_{nB}' if not shared_lays else 'block_shared'
+            with tf.variable_scope(lay_name, reuse=tf.AUTO_REUSE):
                 bo_dict = tblock(
                     in_seq=     in_seq,
                     seed=       seed,
