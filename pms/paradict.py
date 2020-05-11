@@ -101,12 +101,8 @@ class ParaDict(dict):
     @staticmethod
     def dict_2str(d: dict) -> str:
         info = ''
-        for k, v in sorted(d.items()):
-            sk = '%s'%k
-            sv = '%s'%v
-            if len(sk)>25: sk = sk[:25] + ' ...'
-            if len(sv)>35: sv = sv[:35] + ' ...'
-            info += '%30s : %s\n'%(sk,sv)
+        max_len_sk = max([len(str(k)) for k, _ in d.items()])
+        for k, v in sorted(d.items()): info += f'{str(k):{max_len_sk}s} : {str(v)}\n'
         return info[:-1]
 
     def __str__(self):

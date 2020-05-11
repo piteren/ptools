@@ -17,46 +17,43 @@ class MultiSaver:
 
     def __init__(
             self,
-            modelName,                      # root folder of saves, every model will be put in subfolder of model name
-            variables: list or dict,        # variables may be given as list (ALL) or as dict of {key: list} where key is name for the list
-            savePath,                       # remember to create folder before
+            model_name :str,
+            vars: list or dict,             # variables may be given as list (ALL) or as dict of {key: list} where key is name for the list
+            root_FD :str,                   # root (save) folder
             savers: tuple=      (None,),    # list of names of savers
-            maxKeep: list=      None,       # None keeps one
+            max_keep: list=      None,       # None keeps one
             session=            None,
-            verbLev=            0):
+            verb=               0):
 
-        assert os.path.isdir(savePath), 'ERR: save path of model does not exists, please create first'
+        if not os.path.isdir(root_FD): os.mkdir(root_FD)
+        self.save_FD = f'{root_FD}/{model_name}'
+        if not os.path.isdir(self.save_FD): os.mkdir(self.save_FD)
 
-        # create subfolder if needed
-        savePath += '/' + modelName
-        if not os.path.isdir(savePath): os.mkdir(savePath)
-
-        self.verb = verbLev
-        self.modelName = modelName
-        self.variables = variables
-        self.savePath = savePath
+        self.verb = verb
+        self.model_name = model_name
+        self.vars = vars
         self.session = session
 
-        if type(self.variables) is list: self.variables = {'ALL': self.variables}
-        if not maxKeep: maxKeep = [1 for _ in savers]
+        if type(self.vars) is list: self.vars = {'ALL': self.vars}
+        if not max_keep: max_keep = [1 for _ in savers]
 
         self.savers = {}
         for ix in range(len(savers)):
             self.savers[savers[ix]] = {}
-            for var in self.variables:
+            for var in self.vars:
                 self.savers[savers[ix]][var] = tf.train.Saver(
-                    var_list=               self.variables[var],
+                    var_list=               self.vars[var],
                     pad_step_number=        True,
                     save_relative_paths=    True,
-                    max_to_keep=            maxKeep[ix])
+                    max_to_keep=            max_keep[ix])
 
-        self.sStep = {sv: {var: 0 for var in self.variables} for sv in savers} # self step per saver per vars
+        self.s_step = {sv: {var: 0 for var in self.vars} for sv in savers} # self step per saver per vars
         if self.verb > 0:
-            print('\n*** MultiSaver *** for %s model' % self.modelName)
-            print(' > got %d lists of variables' % len(self.variables))
-            for var in self.variables: print(' >> list %s got %d variables'%(var,len(self.variables[var])))
+            print('\n*** MultiSaver *** for %s model' % self.model_name)
+            print(' > got %d lists of variables' % len(self.vars))
+            for var in self.vars: print(' >> list %s got %d variables' % (var, len(self.vars[var])))
             print(' > for every list of var got %d savers: %s' % (len(savers), savers))
-            print(' > savers will save to %s' % self.savePath)
+            print(' > savers will save to %s' % self.save_FD)
 
     # saves checkpoint of given saver
     def save(
@@ -67,13 +64,13 @@ class MultiSaver:
 
         assert saver in self.savers, 'ERR: unknown saver'
 
-        svName = ' ' + saver if saver else ''
-        if self.verb > 0: print('MultiSaver%s saves variables...' % svName)
+        sv_name = ' ' + saver if saver else ''
+        if self.verb > 0: print('MultiSaver%s saves variables...' % sv_name)
 
-        for var in self.variables:
-            ckptPath = self.savePath + '/' + var + '/' + self.modelName
-            if saver: ckptPath += '_' + saver
-            ckptPath += '.ckpt'
+        for var in self.vars:
+            ckpt_path = self.save_FD + '/' + var + '/' + self.model_name
+            if saver: ckpt_path += '_' + saver
+            ckpt_path += '.ckpt'
 
             if not session: session = self.session
 
@@ -82,12 +79,12 @@ class MultiSaver:
 
             self.savers[saver][var].save(
                 sess=               session,
-                save_path=          ckptPath,
-                global_step=        step if step else self.sStep[saver][var],
+                save_path=          ckpt_path,
+                global_step=        step if step else self.s_step[saver][var],
                 latest_filename=    latest_filename,
                 write_meta_graph=   False,
                 write_state=        True)
-            self.sStep[saver][var] += 1
+            self.s_step[saver][var] += 1
             if self.verb > 1: print(' > saved variables %s' % var)
 
     # loads last checkpoint of given saver
@@ -100,12 +97,12 @@ class MultiSaver:
         if not session: session = self.session
         if self.verb > 0: print()
 
-        for var in self.variables:
+        for var in self.vars:
             # look for checkpoint
             latest_filename = 'checkpoint'
             if saver: latest_filename += '_' + saver
             ckpt = tf.train.latest_checkpoint(
-                checkpoint_dir=     self.savePath + '/' + var,
+                checkpoint_dir=self.save_FD + '/' + var,
                 latest_filename=    latest_filename)
 
             if ckpt:
@@ -120,5 +117,5 @@ class MultiSaver:
 
             else:
                 assert allow_init, 'Err: saver load failed: checkpoint not found and not allowInit'
-                session.run(tf.initializers.variables(self.variables[var]))
+                session.run(tf.initializers.variables(self.vars[var]))
                 if self.verb > 0: print('No checkpoint found, variables %s initialized with default initializer' % var)

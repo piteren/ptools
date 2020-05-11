@@ -173,10 +173,10 @@ def enc_CNN(
         ldrt_scale : int or None=           0,          # DRT @enc_lay - scale(*) of first dense, for None or 0 DRT @lay won't be build
         ldrt_drop : float or None=          0.0,        # DRT @enc_lay - dropout
         # DRT after enc
-        drt_shared :bool=                   False,      # shared variables in enc_layers
-        drt_nlays :int=                     0,
-        drt_scale :int or None=             4,
-        drt_drop : float or None=           0.0,
+        #drt_shared :bool=                   False,      # shared variables in enc_layers
+        #drt_nlays :int=                     0,
+        #drt_scale :int or None=             4,
+        #drt_drop : float or None=           0.0,
         # other
         training_flag :tf.Tensor or bool=   None,       # dropout training flag tensor
         initializer=                        None,
@@ -296,6 +296,7 @@ def enc_CNN(
         begin_norm_axis=    -1,
         begin_params_axis=  -1)
 
+    """
     if drt_nlays:
         eout = enc_DRT(
             input=          output,
@@ -312,6 +313,7 @@ def enc_CNN(
             verb=           0)
         output = eout['output']
         zsL += eout['zeroes']
+    """
 
     # prepare fin_state
     fin_state = None

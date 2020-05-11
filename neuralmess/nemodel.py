@@ -13,11 +13,11 @@
                 - variables returned under 'train_vars' key are optimized (if 'train_vars' key is not present all trainable vars are optimized)
                 - sub-lists of variables will serve for separate savers (saved in subfolders)
 
-    Model building params (arguments) may come from (in order of overriding: lower overrides upper):
-        - NEModel initializer arguments
-        - mdict.dct (when saved in model folder)
-        - fwd_func arguments defaults
-        - mdict (given to NEModel init)
+    Model building params and their arguments (p&a) may come from (in order of overriding):
+        - NEModel __init__ p&a
+        - mdict.dct p&a (when saved in model folder)
+        - fwd_func p&a (defaults)
+        - mdict (for fwd_func, given to NEModel init)
 
     - keeps updated model_building_params under self (dict) keys
     - tensors, placeholders, etc... returned by model function are also kept under self (dict) keys
@@ -48,8 +48,7 @@ from ptools.neuralmess.base_elements import num_var_floats, lr_scaler, gc_loss_r
 from ptools.neuralmess.dev_manager import tf_devices
 from ptools.neuralmess.multi_saver import MultiSaver
 
-# restricted keys for fwd_func mdict (model params-arguments dict)
-# if they appear in mdict, should be named exactly like below
+# restricted keys for fwd_func mdict (model params-arguments dict, if they appear in mdict, should be named exactly like below)
 SPEC_KEYS = [
     'name',                                             # model name
     'seed',                                             # seed for TF nad numpy
@@ -67,7 +66,7 @@ class NEModel(dict):
     def __init__(
             self,
             fwd_func,                               # function building forward graph (from PH to loss)
-            mdict :dict or ParaDict,                # model parameters-arguments dictionary
+            mdict :dict,                            # model parameters-arguments dictionary
             # TODO: I'm not sure whether session can be given here, since we create tf.Graph for model below (graph should be given to session...)
             # I will lock this feature...
             # session :tf.Session=        None,       # session to use
@@ -82,7 +81,7 @@ class NEModel(dict):
             warm_up=                    None,
             ann_base=                   None,
             ann_step=                   1,
-            n_wup_off :int or float=    1,
+            n_wup_off :float=           1,
             avt_SVal=                   1,
             avt_window=                 100,
             avt_max_upd=                1.5,
@@ -360,12 +359,12 @@ class NEModel(dict):
             if not saver_vars[key]: saver_vars.pop(key)
         # add saver and load
         self.saver = MultiSaver(
-            modelName=  self['name'],
-            variables=  saver_vars,
-            savePath=   save_TFD,
+            model_name= self['name'],
+            vars=       saver_vars,
+            root_FD=    save_TFD,
             savers=     savers_names,
             session=    self.session,
-            verbLev=    self.verb)
+            verb=       self.verb)
         if load_saver:
             if type(load_saver) is bool: load_saver=None
             self.saver.load(saver=load_saver)
