@@ -1,5 +1,4 @@
 GPUtil
-Levenshtein
 matplotlib
 nltk
 numpy

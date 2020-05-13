@@ -4,8 +4,7 @@
 
 """
 
-import Levenshtein
-from nltk.translate.bleu_score import sentence_bleu
+import nltk
 import rouge
 
 from ptools.textool.tokenization import tokenize_words
@@ -14,7 +13,7 @@ from ptools.neuralmess.vext.gpt_encoder.bpencoder import get_encoder
 
 # returns Levenshtein-distance of two strings
 def lev_dist(source :str, target :str):
-    return Levenshtein.distance(source, target)
+    return nltk.edit_distance(source, target)
 
 # returns Levenshtein-distance of two lists (or strings)
 def lev_distL(source :list or str, target :list or str):
@@ -63,7 +62,7 @@ def bleu(
         if ngram == 3: weights = (0.33,0.33,0.33,0)
 
     sb = 0
-    try: sb = sentence_bleu(reft,cndt,weights=weights)
+    try: sb = nltk.translate.bleu_score.sentence_bleu(reft,cndt,weights=weights)
     except ValueError: pass
 
     return sb
