@@ -331,7 +331,6 @@ class PaSpa:
         s = s[:-1] + '}'
         return s
 
-    # TODO: replace with print width managing function
     # returns info(string) about self
     def __str__(self):
         info = '*** PaSpa *** parameters space:\n'
