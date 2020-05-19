@@ -61,7 +61,6 @@ def tf_devices(
         print('no GPUs available >> using only CPU')
         num = len(devices) if type(devices) is list and devices else 1
         devices = ['/device:CPU:0']*num
-    # TODO: handle: no-GPU system >> devices=None or ^ ['/device:CPU:0']*num
     else:
         # got nicely TF formated devices (and probably earlier masked) >> no action needed (convert to list only...)
         if type(devices) is str or (type(devices) is list and devices and type(devices[0]) is str):
