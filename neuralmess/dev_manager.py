@@ -107,13 +107,12 @@ def nestarter(
         log_folder: str or None=    '_log', # for None doesn't logs
         custom_name: str or None=   None,   # set custom logger name, for None uses default
         devices=                    -1,     # False for not managing TF devices
-        verb=                       1):
+        verb=                       1,
+        silent_error=               False): # turns off any TF errors, be careful
 
-    # tf verbosity
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-    #tf.logging.set_verbosity(tf.logging.ERROR)
     warnings.filterwarnings('ignore')
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' if silent_error else '2'
 
     if log_folder: set_logger(logFD=log_folder, custom_name=custom_name, verb=verb) # set logger
     if devices is not False: return tf_devices(devices=devices, verb=verb)
