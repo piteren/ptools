@@ -4,6 +4,9 @@
 
     some encoders
 
+    * all encoders do IN & OUT LayerNorm
+    * lay_DRT does OUT LN
+
 """
 
 import tensorflow as tf
@@ -380,7 +383,7 @@ def enc_TNS(
         hist_summ = []
 
         output = in_seq
-        taskQueryNorm = None
+        task_query_norm = None
         if task_query is None:
             hist_summ.append(tf.summary.histogram('a_inputSeq', output, family=name))
             # layer norm 1 on seq
@@ -392,10 +395,10 @@ def enc_TNS(
                 hist_summ.append(tf.summary.histogram('b_inputSeqLN', output, family=name))
         else:
             hist_summ.append(tf.summary.histogram('a_inTaskQuery', task_query, family=name))
-            taskQueryNorm = task_query
+            task_query_norm = task_query
             # layer norm 1 on taskQuery
             if do_LN:
-                taskQueryNorm = tf.contrib.layers.layer_norm(
+                task_query_norm = tf.contrib.layers.layer_norm(
                     inputs=             task_query,
                     begin_norm_axis=    -1,
                     begin_params_axis=  -1)
@@ -404,7 +407,7 @@ def enc_TNS(
         # multi head self attention
         mha_out = mh_attn(
             in_seq=         output,
-            query=          taskQueryNorm,
+            query=          task_query_norm,
             dropout_att=    dropout_att,
             drop_flag=      drop_flag,
             seed=           seed)
