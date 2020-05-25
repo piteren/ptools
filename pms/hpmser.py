@@ -215,6 +215,7 @@ def hpmser(
         continue_last = False
 
     search_RL = []
+    max_SR = None
     paspa = None
 
     if continue_last:
@@ -225,7 +226,11 @@ def hpmser(
                 for ix in range(len(results_FDL)): print(f' > {ix:2d}: {results_FDL[ix]}')
             print(f'will continue with the last one')
             name = results_FDL[-1] # take last
+
             search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
+
+            search_RL = sorted(search_RL, key=lambda x: x.smooth_score, reverse=True)  # sort
+            max_SR = search_RL[0]
     else:
         if not name: name = stamp()
         elif add_stamp: name = f'{stamp(letters=0)}_{name}'
@@ -295,10 +300,8 @@ def hpmser(
     for k in psd:
         if k in def_kwargs: def_kwargs.pop(k)
 
-    search_RL = []  # results list
-    max_SR = None
+    runIX = len(search_RL)
     try:
-        runIX = 0
         while True:
 
             if verb>1: print(f' > got {len(devices)} devices at {runIX} loop start')
