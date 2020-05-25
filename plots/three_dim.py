@@ -47,7 +47,7 @@ def three_dim(
 
 if __name__ == '__main__':
 
-    from neuralmess.layers import positional_encoding
+    from ptools.neuralmess.layers import positional_encoding
 
     pe = positional_encoding(90,25,verb=1)
     pe = np.squeeze(pe)
