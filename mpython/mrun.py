@@ -4,6 +4,9 @@
 
     mrun - multi run function
 
+    assuming there is a callable func, that we want to run with a list of kwargs in parallel on devices
+    there is mrun that will do it for you
+
 """
 
 from inspect import getfullargspec
@@ -22,7 +25,7 @@ from ptools.mpython.mpdecor import qproc
 def mrun(
         func :Callable,             # function to run
         kwargsL :List[dict],        # list of function kwargs (dicts) for runs
-        devices=            None,   # devices to use for search
+        devices=            None,   # devices to use
         use_all_cores=      True,   # True: when devices is None >> uses all cores, otherwise as set by devices
         subprocess=         True,   # True: runs func in subprocesses, otherwise in this process
         verb=               1):
@@ -32,7 +35,7 @@ def mrun(
     if devices is None: devices = [None] * (cpu_count() if use_all_cores else 1) # manage case of None for devices
     assert subprocess or (not subprocess and len(devices)==1), 'ERR: cannot use many devices without subprocess'
 
-    if verb > 0: print(f'\nMrun starting for: {len(kwargsL)} task, {func.__name__}, {len(devices)} devices')
+    if verb > 0: print(f'\nmrun starting for {len(kwargsL)} task for {func.__name__} on {len(devices)} devices')
 
     # func wrap with interface
     def inner_func(
@@ -92,10 +95,11 @@ def mrun(
         if verb > 1: print(f' > got {len(resL)} results in {runIX} loop')
 
         # manage results
+        ts_len = len(str(len(kwargsL)))
         for res in resL:
             devices.append(res['device']) # return device
             resultsD[res['kwIX']] = res['result']
-            if verb > 0: print(f' > {res["kwIX"]:3d} processed ({time.time() - res["s_time"]:.1f}s)')
+            if verb > 0: print(f' > #{res["kwIX"]:{ts_len}d} processed ({time.time() - res["s_time"]:.1f}s)')
 
     return [resultsD[ix] for ix in range(len(resultsD))]
 
@@ -108,7 +112,7 @@ def example_mrun(
 
     def some_func(
             name :str,
-            device,
+            device= None,
             wait=   2,
             verb=   0):
 
@@ -117,7 +121,7 @@ def example_mrun(
         return f'done {name}'
 
     names = ['ala','bala','gila','deryl'] *10
-    kwL = [{'name': names[ix], 'device': None} for ix in range(len(names))]
+    kwL = [{'name': names[ix]} for ix in range(len(names))]
 
     resL = mrun(
         func=       some_func,

@@ -28,9 +28,39 @@ from multiprocessing import Queue, Process, cpu_count
 import numpy as np
 import os
 import random
+from typing import Callable, List
 
 from ptools.lipytools.little_methods import short_scin
 
+# decorated que multi processor
+class DeQueMP:
+
+    def __init__(
+            self,
+            func :Callable,             # function to run
+            devices=        None,       # devices to use
+            use_all_cores=  True,       # True: when devices is None >> uses all cores, otherwise as set by devices
+            user_tasks=     False,      # user_tasks mode, in user_tasks mode user sends kwargs dicts (via put_task)
+            rq_trgsize=     500,        # r_que target size (if not user_tasks mode), won't grow above
+            name=           'qmp',
+            sorted_res=     False,      # returns results sorted by task_IX
+            verb=           0):
+
+        self.verb = verb
+        if devices is None: devices = [None] * (cpu_count() if use_all_cores else 1)  # manage case of None for devices
+        self.n_devices = len(devices)
+        if verb > 0: print(f'\nDeQueMP starting for {func.__name__} on {self.n_devices} devices')
+
+        self.task_IX = 0
+
+    def put_task(self):
+        pass
+
+    def get_result(self):
+        pass
+
+    def close(self):
+        pass
 
 # default task generator
 class TaskGenerator:
