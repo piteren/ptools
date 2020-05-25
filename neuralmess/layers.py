@@ -251,26 +251,30 @@ def tf_drop(
 
 # positional encoding layer
 def positional_encoding(
-        positions,
-        d_model,
-        as_numpy=   True):
+        positions :int,         # max number of positions to encode
+        width :int,             # width of positions vector
+        min_pi_range=       1,
+        max_pi_range=       10,
+        as_numpy=           True,
+        verb=               0):
 
-    def get_angles(
-            pos,
-            i,
-            d_model):
-        angle_rates = 1 / np.power(10000, (2 * (i // 2)) / np.float32(d_model))
-        return pos * angle_rates
+    angle_rates = np.linspace(min_pi_range/max_pi_range, 1, num=width)
+    if verb > 0: print(f'\ni.linspace\n{angle_rates}')
+    angle_rates = angle_rates[np.newaxis, :]
+    if verb > 0: print(f'\nangle_rates.new_axis\n{angle_rates}')
 
-    angle_rads = get_angles(
-        pos=        np.arange(positions)[:, np.newaxis],
-        i=          np.arange(d_model)[np.newaxis, :],
-        d_model=    d_model)
+    pos = np.arange(positions)[:, np.newaxis]
+    if verb > 0: print(f'\npos.arange.newaxis\n{pos}')
+    pos = pos / positions * max_pi_range
+    if verb > 0: print(f'\npos.scaled to range\n{pos}')
+    angle_rads = pos * angle_rates
+    if verb > 0: print(f'\nangle_rads {angle_rads.shape}\n{angle_rads}')
 
-    angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2])
-    angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2])
+    angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2] * np.pi)
+    angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2] * np.pi)
 
     pos_encoding = angle_rads[np.newaxis, ...]
+
     pos_encoding = pos_encoding - pos_encoding.mean()
 
     if as_numpy: pos_encoding = pos_encoding.astype(dtype=np.float32)

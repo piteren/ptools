@@ -223,6 +223,7 @@ def hpmser(
             if len(results_FDL) > 1:
                 print(f'\nThere are {len(results_FDL)} searches:')
                 for ix in range(len(results_FDL)): print(f' > {ix:2d}: {results_FDL[ix]}')
+            print(f'will continue with the last one')
             name = results_FDL[-1] # take last
             search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
     else:
