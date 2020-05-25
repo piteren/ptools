@@ -194,6 +194,7 @@ def show_hpmser_resuls(hpmser_FD :str):
 def hpmser(
         func :Callable,                     # function which parameters need to be optimized
         psd :dict,                          # dictionary defining the space of parameters
+        continue_last=              False,  # flag to continue last search from hpmser_FD
         name :str=                  None,   # for None stamp will be used
         add_stamp=                  True,   # adds short stamp to name, when name given
         rad :float=                 0.5,    # radius for smoothing
@@ -207,23 +208,44 @@ def hpmser(
         hpmser_FD : str or bool=    None,   # folder, where save search results and html, for None does not save, for True uses default
         verb=                       1):
 
-    if not name: name = stamp()
-    elif add_stamp: name = f'{stamp(letters=0)}_{name}'
+    # manage hpmser_FD, create if needed
+    if hpmser_FD is True: hpmser_FD = 'hpmser' # default for True
+    if not os.path.isdir(hpmser_FD):
+        os.mkdir(hpmser_FD)
+        continue_last = False
+
+    search_RL = []
+    paspa = None
+
+    if continue_last:
+        results_FDL = sorted(os.listdir(hpmser_FD))
+        if len(results_FDL):
+            if len(results_FDL) > 1:
+                print(f'\nThere are {len(results_FDL)} searches:')
+                for ix in range(len(results_FDL)): print(f' > {ix:2d}: {results_FDL[ix]}')
+            name = results_FDL[-1] # take last
+            search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
+    else:
+        if not name: name = stamp()
+        elif add_stamp: name = f'{stamp(letters=0)}_{name}'
+
+        # create subfolder if needed
+        subfolder = f'{hpmser_FD}/{name}'
+        if not os.path.isdir(subfolder):
+            os.mkdir(subfolder)
+            continue_last = False
+
     if verb > 0:
         print(f'\n*** hpmser *** {name} started for {func.__name__} ...')
         print(f'    rad {rad}, ax_rrad {ax_rrad}, space_prob {space_prob}')
+        if continue_last and search_RL: print(f'    search will continue with {len(search_RL)} results...')
 
-    paspa = PaSpa(
-        psd=    psd,
-        seed=   None,
-        verb=   verb-1)
+    if not paspa:
+        paspa = PaSpa(
+            psd=    psd,
+            seed=   None,
+            verb=   verb-1)
     if verb>0: print(f'\n{paspa}\n')
-
-    # set folders, create if needed
-    if hpmser_FD:
-        if hpmser_FD is True: hpmser_FD = 'hpmser'
-        if not os.path.isdir(hpmser_FD): os.mkdir(hpmser_FD)
-        os.mkdir(f'{hpmser_FD}/{name}')
 
     # manage devices
     if not subprocess: use_all_cores = False

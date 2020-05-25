@@ -251,24 +251,28 @@ def tf_drop(
 
 # positional encoding layer
 def positional_encoding(
-       positions,
-       d_model):
+        positions,
+        d_model,
+        as_numpy=   True):
 
-   def get_angles(
-           pos,
-           i,
-           d_model):
-       angle_rates = 1 / np.power(10000, (2 * (i // 2)) / np.float32(d_model))
-       return pos * angle_rates
+    def get_angles(
+            pos,
+            i,
+            d_model):
+        angle_rates = 1 / np.power(10000, (2 * (i // 2)) / np.float32(d_model))
+        return pos * angle_rates
 
-   angle_rads = get_angles(
-       pos=        np.arange(positions)[:, np.newaxis],
-       i=          np.arange(d_model)[np.newaxis, :],
-       d_model=    d_model)
+    angle_rads = get_angles(
+        pos=        np.arange(positions)[:, np.newaxis],
+        i=          np.arange(d_model)[np.newaxis, :],
+        d_model=    d_model)
 
-   angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2]) # apply sin to even (2i)  indices in the array
-   angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2]) # apply cos to odd (2i+1) indices in the array
+    angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2])
+    angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2])
 
-   pos_encoding = angle_rads[np.newaxis, ...]
+    pos_encoding = angle_rads[np.newaxis, ...]
+    pos_encoding = pos_encoding - pos_encoding.mean()
 
-   return tf.cast(pos_encoding, dtype=tf.float32)
+    if as_numpy: pos_encoding = pos_encoding.astype(dtype=np.float32)
+    else: pos_encoding = tf.cast(pos_encoding, dtype=tf.float32)
+    return pos_encoding
