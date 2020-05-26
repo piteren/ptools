@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     from ptools.neuralmess.layers import positional_encoding
 
-    pe = positional_encoding(90,25,verb=1)
+    pe = positional_encoding(90,5,0.5,2,verb=1)
     pe = np.squeeze(pe)
 
     from ptools.plots.two_dim import two_dim
