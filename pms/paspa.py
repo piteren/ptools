@@ -77,6 +77,29 @@ class PaSpa:
             self.psd_T[axis] = tp+tpn # string like 'list_int'
             self.psd_W[axis] = param_def[-1]-param_def[0] if tpn != '_diff' else len(param_def)-1
 
+        self.str_W = {} # formatting width for axes
+        for axis in self.psd:
+            if 'tuple' in self.psd_T[axis]:
+                max_w = 0
+                for e in self.psd[axis]:
+                    if len(str(e)) > max_w: max_w = len(str(e))
+                self.str_W[axis] = max_w
+            # list
+            else:
+                if 'int' in self.psd_T[axis]:
+                    max_w = 0
+                    for e in self.psd[axis]:
+                        if len(str(e)) > max_w: max_w = len(str(e))
+                    self.str_W[axis] = max_w
+                else:
+                    max_dw = 1
+                    if self.psd[axis][1] >= 10:
+                        l = int(round(self.psd[axis][1]))
+                        max_dw = len(str(l))
+                    max_fw = 3
+                    if self.psd[axis][1] < 0.01: max_fw = 6
+                    self.str_W[axis] = max_dw + 1 + max_fw
+
     # checks if given value belongs to an axis of space
     def __is_in_axis(
             self,
@@ -190,15 +213,13 @@ class PaSpa:
         return {key: self.__get_pval(key, ref_point[key], ax_dst) for key in self.psd.keys()}
 
     # point -> nicely formatted string
-    @staticmethod
-    def point_2str(p :dict) -> str:
+    def point_2str(self, p :dict) -> str:
         s = '{'
         for key in sorted(list(p.keys())):
-            s += '%s:'%key
-            if type(p[key]) is float:
-                if p[key]<0.001: s += '%.7f ' % p[key]
-                else: s += '%.3f ' % p[key]
-            else: s += '%s ' % p[key]
+            s += f'{key}:'
+            vs = str(p[key])
+            if len(vs) > self.str_W[key]: vs = vs[:self.str_W[key]]
+            s += f'{vs:{self.str_W[key]}s} '
         s = s[:-1] + '}'
         return s
 
@@ -220,32 +241,32 @@ class PaSpa:
 
 def example_paspa(dc):
 
-    spsa = PaSpa(dc)
+    paspa = PaSpa(dc)
 
     print()
-    print(spsa)
+    print(paspa)
 
     print()
     points = []
     for _ in range(10):
-        point = spsa.sample_point()
+        point = paspa.sample_point()
         points.append(point)
-        print(PaSpa.point_2str(point))
+        print(paspa.point_2str(point))
 
     print()
     for ix in range(10):
         ax_dst = random.random()
         point_a = points[ix]
-        point_b = spsa.sample_point(point_a, ax_dst)
-        print(f'ax_dst {ax_dst:.3f} >> distance {spsa.dist(point_a, point_b):.3f}')
-        print(f' {PaSpa.point_2str(point_a)}')
-        print(f' {PaSpa.point_2str(point_b)}')
+        point_b = paspa.sample_point(point_a, ax_dst)
+        print(f'ax_dst {ax_dst:.3f} >> distance {paspa.dist(point_a, point_b):.3f}')
+        print(f' {paspa.point_2str(point_a)}')
+        print(f' {paspa.point_2str(point_b)}')
 
     print()
     for _ in range(10):
-        point_a = spsa.sample_point()
-        point_b = spsa.sample_point()
-        print(f'distance {spsa.dist(point_a, point_b):.3f} between:\n {PaSpa.point_2str(point_a)}\n {PaSpa.point_2str(point_b)}')
+        point_a = paspa.sample_point()
+        point_b = paspa.sample_point()
+        print(f'distance {paspa.dist(point_a, point_b):.3f} between:\n {paspa.point_2str(point_a)}\n {paspa.point_2str(point_b)}')
 
 
 if __name__ == '__main__':

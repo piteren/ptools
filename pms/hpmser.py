@@ -184,9 +184,9 @@ def _nice_results_str(
         name,
         search_RL :List[SeRes], # should be sorted
         paspa :PaSpa,
-        dst :float,       # distance to classify point as close to another
+        dst :float,             # distance to classify point as close to another
         n_clusters=     30):
-    results = f'Search run {name} - {len(search_RL)} results\n\n{paspa}\n'
+    results = f'Search run {name} - {len(search_RL)} results (dst_smth: {dst})\n\n{paspa}\n'
 
     clusters = _get_clusters(search_RL, paspa, dst)
     sorted_clusters = list(clusters.keys())
@@ -204,7 +204,7 @@ def _nice_results_str(
         scores = [search_RL[sIX].score for sIX in clusters[srIX][1]]
         maxs = max(scores)
         mins = min(scores)
-        results += f'{sr.smooth_score:8.5f} [{sr.score:8.5f}] {sr.id:4d}({len(cl[1]):4d}) {maxs:.3f} {mins:.3f} {maxs-mins:.3f} {PaSpa.point_2str(sr.point)}\n'
+        results += f'{sr.smooth_score:8.5f} [{sr.score:8.5f}] {sr.id:4d}({len(cl[1]):4d}) {maxs:.3f} {mins:.3f} {maxs-mins:.3f} {paspa.point_2str(sr.point)}\n'
 
     results += '\n   x '
     for srIX in top_srIX: results += f'{search_RL[srIX].id:4d} '
@@ -221,7 +221,7 @@ def _nice_results_str(
     results += '  smooth [   local]   id(n_cl) {params...}\n'
     for sr in search_RL:
         n_close = _num_of_close(sr.point, search_RL, paspa, dst)
-        results += f'{sr.smooth_score:8.5f} [{sr.score:8.5f}] {sr.id:4d}({n_close:4d}) {PaSpa.point_2str(sr.point)}\n'
+        results += f'{sr.smooth_score:8.5f} [{sr.score:8.5f}] {sr.id:4d}({n_close:4d}) {paspa.point_2str(sr.point)}\n'
     return results
 
 # writes 3D graph to html with plotly
@@ -295,6 +295,8 @@ def show_hpmser_resuls(
     name = results_FDL[rIX]
 
     search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
+    paspa = PaSpa(paspa.psd)  # TODO: delete << (legacy ...for old paspa)
+    print(f'\n{paspa}')
     _smooth_and_sort(search_RL, paspa, dst_smth=dst_smth)
 
     _write_graph(name, search_RL, hpmser_FD, silent=False)
@@ -421,7 +423,7 @@ def hpmser(
                 if verb > 0:
                     print(f'R:{new_SR.id} {new_SR.score:6.3f} ', end='')
                     if max_SR: print(f'[{paspa.dist(max_SR.point, new_SR.point):.2f}] {max_SR.id} (max: {max_SR.smooth_score:6.3f}/{max_SR.score:6.3f}) ', end='')
-                    print(f'{PaSpa.point_2str(new_SR.point)} {time.time() - res["s_time"]:.1f}s')
+                    print(f'{paspa.point_2str(new_SR.point)} {time.time() - res["s_time"]:.1f}s')
 
             if new_SRL:
                 search_RL = _update_and_save(
@@ -543,7 +545,7 @@ if __name__ == '__main__':
     example_hpmser_smpl(
         n_samples=      1000,
         hpmser_FD=      '_hpmser',
-        dst_smth=       0.05,
+        dst_smth=       0.01,
         prob_max=       0.1,
         prob_top=       0.5,
         n_top=          10)
