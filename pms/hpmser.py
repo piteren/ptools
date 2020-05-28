@@ -30,7 +30,8 @@ from typing import Callable, List
 from ptools.lipytools.decorators import timing
 from ptools.lipytools.little_methods import stamp, w_pickle, r_pickle
 from ptools.pms.paspa import PaSpa
-from ptools.mpython.mpdecor import qproc
+from ptools.pms.hpmser_wraps import interface_wrap_H, interface_wrap_MP_H, wrap_que
+
 
 # single search result
 class SeRes:
@@ -46,52 +47,128 @@ class SeRes:
         self.score = score
         self.smooth_score = None
 
-# calculates smooth for given list of SeRes
+
+# number of points in search_RL closer than dst to given point
+def _num_of_close(
+        point :dict,
+        search_RL :List[SeRes],
+        paspa :PaSpa,
+        dst: float):            # distance to classify point as close to another
+    n_close = 0
+    for p in search_RL:
+        if paspa.dist(p.point, point) <= dst: n_close += 1
+    return n_close
+
+# returns smooth score for given point in relation to other in search_RL
+def _smooth_score(
+        point :dict,
+        search_RL :List[SeRes],
+        paspa :PaSpa,
+        dst_smth: float):
+
+    tot_weight = 0
+    s_val = 0
+    for zix in range(len(search_RL)):
+        dst = paspa.dist(point, search_RL[zix].point)
+        weight = (dst_smth-dst) / dst_smth
+        if weight < 0: weight = 0
+        s_val += search_RL[zix].score * weight
+        tot_weight += weight
+
+    if tot_weight > 0: s_val /= tot_weight
+    # no neighbour points >> average of all
+    else:
+        accs = [sr.score for sr in search_RL]
+        s_val = sum(accs) / len(accs)
+    return s_val
+
+# smooths search_RL (updates .smooth_score)
 def _smooth_RL(
-        search_RL: List[SeRes], # list of search results
-        paspa :PaSpa,           # parameters space
-        rad: float=     0.5):   # smoothing radius
-
-    # returns smoth score for given point in relation to other in search_RL
-    def smooth_score(point :dict):
-
-        tot_weight = 0
-        s_val = 0
-        for zix in range(len(search_RL)):
-            dst = paspa.dist(point, search_RL[zix].point)
-            weight = (rad-dst) / rad
-            if weight < 0: weight = 0
-            s_val += search_RL[zix].score * weight
-            tot_weight += weight
-
-        if tot_weight > 0: s_val /= tot_weight
-        # no neighbour points >> average of all
-        else:
-            accs = [sr.score for sr in search_RL]
-            s_val = sum(accs) / len(accs)
-        return s_val
+        search_RL: List[SeRes],
+        paspa :PaSpa,
+        dst_smth: float):
 
     for six in range(len(search_RL)):
-        search_RL[six].smooth_score = smooth_score(search_RL[six].point)
+        search_RL[six].smooth_score = _smooth_score(
+            point=      search_RL[six].point,
+            search_RL=  search_RL,
+            paspa=      paspa,
+            dst_smth=   dst_smth)
+
+# smooths & sorts
+def _smooth_and_sort(
+        search_RL :List[SeRes],
+        paspa :PaSpa,
+        dst_smth :float):
+    _smooth_RL(
+        search_RL=  search_RL,
+        paspa=      paspa,
+        dst_smth=   dst_smth)
+    search_RL.sort(key=lambda x: x.smooth_score, reverse=True)
+
+# updates list, smooths, sorts, writes
+def _update_and_save(
+        name,
+        search_RL :List[SeRes],
+        paspa :PaSpa,
+        dst_smth :float,
+        new_SR :SeRes or List[SeRes]=   None,
+        hpmser_FD :str=                 None):
+
+    if new_SR:
+        if type(new_SR) is not list: new_SR = [new_SR]
+        search_RL += new_SR
+
+    _smooth_and_sort(
+        search_RL=  search_RL,
+        paspa=      paspa,
+        dst_smth=   dst_smth)
+
+    if hpmser_FD:
+        w_pickle((search_RL, paspa), f'{hpmser_FD}/{name}/{name}_results.srl')
+        _write_graph(
+            name=       name,
+            search_RL=  search_RL,
+            hpmser_FD=  hpmser_FD)
+    return search_RL
 
 # returns sample closer to local maximum
 def _get_opt_sample(
         paspa :PaSpa,
-        search_RL :List[SeRes]= None, # ...should be smoothed and sorted!
-        ax_rrad=                None,
-        space_prob :float=      0.5):
+        search_RL :List[SeRes]= None,   # ...should be smoothed and sorted!
+        dst_smpl=               0.1,
+        prob_max=               0.4,    # probability of sampling from max area
+        prob_weighted=          0.3,    # probability of weighted sampling from n_weighted samples
+        n_weighted=             100):
 
-    max_point = search_RL[0].point if search_RL and random.random() > space_prob else None
-    return paspa.sample_point(max_point, ax_rrad)
+    if random.random() < prob_max or not search_RL:
+        max_point = search_RL[0].point if search_RL else None
+        spoint = paspa.sample_point(
+            ref_point=  max_point,
+            ax_dst=     dst_smpl)
+    else:
+        prob_weighted = prob_weighted / (1 - prob_max) # adjust
+        if random.random() < prob_weighted:
+            spoints = [paspa.sample_point(ref_point=None) for _ in range(n_weighted)] # list of points
+            spw = [_smooth_score(sp, search_RL, paspa, dst_smth=dst_smpl) for sp in spoints] # list of scores
+            min_spw = min(spw)
+            spw = [w-min_spw for w in spw] # subtract min
+            spoint = random.choices(spoints, weights=spw, k=1)[0]
+        else: spoint = paspa.sample_point(ref_point=None) # sample from whole space
+
+    return spoint
 
 # prepares nice string of results
 def _nice_results_str(
         name,
-        search_RL,
-        paspa):
+        search_RL :List[SeRes],
+        paspa :PaSpa,
+        dst :float):       # distance to classify point as close to another
     results = f'Search run {name} : {len(search_RL)} results by smooth_score:\n\n{paspa}\n\n'
-    results += '  - smooth [local] id {params...} -\n'
-    for sr in search_RL: results += f'{sr.smooth_score:9.5f} [{sr.score:9.5f}] {sr.id:4d}: {PaSpa.point_2str(sr.point)}\n'
+    results += '  smooth [local] id (n_close) {params...}\n'
+    for sr in search_RL:
+        n_close = _num_of_close(sr.point, search_RL, paspa, dst)
+        results += f'{sr.smooth_score:9.5f} [{sr.score:9.5f}] {sr.id:4d}({n_close:4d}): {PaSpa.point_2str(sr.point)}\n'
     return results
 
 # writes 3D graph to html with plotly
@@ -145,32 +222,13 @@ def _write_graph(
     file = f'{hpmser_FD}/{name}/{name}_results.html'
     fig.write_html(file, auto_open=False if os.path.isfile(file) else True)
 
-# updates list, sorts, writes
-def _update_and_save(
-        name,
-        search_RL :List[SeRes], # ...should be smoothed
-        paspa :PaSpa,
-        rad :float,
-        new_SR :SeRes or List[SeRes]=   None,
-        hpmser_FD :str=                 None):
-
-    if new_SR:
-        if type(new_SR) is not list: new_SR = [new_SR]
-        search_RL += new_SR
-    _smooth_RL(search_RL, paspa, rad)  # update smooth
-    search_RL = sorted(search_RL, key=lambda x: x.smooth_score, reverse=True)  # sort
-    if hpmser_FD:
-        w_pickle((search_RL, paspa), f'{hpmser_FD}/{name}/{name}_results.srl')
-        _write_graph(
-            name=       name,
-            search_RL=  search_RL,
-            hpmser_FD=  hpmser_FD)
-    return search_RL
-
 # load results, show graph and save, print results
-def show_hpmser_resuls(hpmser_FD :str):
+def show_hpmser_resuls(
+        hpmser_FD :str,
+        dst_smth :float):
 
     results_FDL = sorted(os.listdir(hpmser_FD))
+    name = None
     if len(results_FDL):
         rIX = -1
         if len(results_FDL) > 1:
@@ -186,8 +244,11 @@ def show_hpmser_resuls(hpmser_FD :str):
         name = results_FDL[rIX]
 
         search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
+        _smooth_and_sort(search_RL, paspa, dst_smth=dst_smth)
+
         _write_graph(name, search_RL, hpmser_FD, silent=False)
-        print(f'\n{_nice_results_str(name, search_RL, paspa)}')
+        print(f'\n{_nice_results_str(name, search_RL, paspa, dst=dst_smth)}')
+    return name
 
 # hpms searching function
 @timing
@@ -197,9 +258,9 @@ def hpmser(
         continue_last=              False,  # flag to continue last search from hpmser_FD
         name :str=                  None,   # for None stamp will be used
         add_stamp=                  True,   # adds short stamp to name, when name given
-        rad :float=                 0.5,    # radius for smoothing
-        ax_rrad :float=             0.3,    # relative distance on axis of space for sampling, should be < 1
-        space_prob :float=          0.5,    # probability of sampling whole space (exploration)
+        dst_smth=                   0.1,    # smoothing distance (L1N) (also distance for sampling)
+        prob_max=                   0.6,    # probability of sampling from max area
+        prob_weighted=              0.2,    # probability of weighted sampling from n_weighted samples
         def_kwargs :dict=           None,   # func kwargs
         devices=                    None,   # devices to use for search
         use_all_cores=              True,   # True: when devices is None >> uses all cores, otherwise as set by devices
@@ -243,7 +304,7 @@ def hpmser(
 
     if verb > 0:
         print(f'\n*** hpmser *** {name} started for {func.__name__} ...')
-        print(f'    rad {rad}, ax_rrad {ax_rrad}, space_prob {space_prob}')
+        print(f'    dst_smth {dst_smth}, prob_max {prob_max}, prob_weighted {prob_weighted}')
         if continue_last and search_RL: print(f'    search will continue with {len(search_RL)} results...')
 
     if not paspa:
@@ -258,42 +319,7 @@ def hpmser(
     if devices is None: devices = [None] * (cpu_count() if use_all_cores else 1) # manage case of None for devices
     assert subprocess or (not subprocess and len(devices)==1), 'ERR: cannot use many devices without subprocess'
 
-    # func wrap with interface
-    def inner_func(
-            device,
-            spoint,
-            s_time,
-            kwargs):
-
-        # eventually add device/devices to func kwargs (if func accepts device)
-        pms = getfullargspec(func).args
-        for k in ['device','devices']:
-            if k in pms: kwargs[k] = device
-
-        res = func(**spoint, **kwargs) # call
-
-        if type(res) is dict:   score = res['score']
-        else:                   score = res
-
-        return {
-            'device':       device,
-            'spoint':       spoint,
-            's_time':       s_time,
-            'score':        score}
-
-    que = Queue() # results always will be returned via que (loop architecture)
-
-    # func wrap with interface
-    def interface_wrap(**kwargs):
-        result = inner_func(**kwargs)
-        que.put(result)
-
-    # func wrap with interface and MP
-    @qproc(que)
-    def interface_wrap_MP(**kwargs):
-        return inner_func(**kwargs)
-
-    loop_func = interface_wrap_MP if subprocess else interface_wrap
+    loop_func = interface_wrap_MP_H if subprocess else interface_wrap_H
 
     # manage def_kwargs
     if not def_kwargs: def_kwargs = {}
@@ -308,20 +334,24 @@ def hpmser(
             # use all available devices
             while devices:
                 spoint = _get_opt_sample(
-                    paspa=      paspa,
-                    search_RL=  search_RL,
-                    ax_rrad=    ax_rrad * random.random(), # use rad randomly decreased
-                    space_prob= space_prob)
+                    paspa=          paspa,
+                    search_RL=      search_RL,
+                    dst_smpl=       dst_smth,
+                    prob_max=       prob_max,
+                    prob_weighted=  prob_weighted,
+                    n_weighted=     10 + pow(2,len(psd)//2))
                 loop_func(
+                    func=       func,
                     device=     devices.pop(0),
                     spoint=     spoint,
                     s_time=     time.time(),
-                    kwargs=     def_kwargs)
+                    **def_kwargs)
 
+            print('got here also...')
             # flush que
-            resL = [que.get()] # at least one
+            resL = [wrap_que.get()] # at least one
             while True:
-                try:            resL.append(que.get_nowait())
+                try:            resL.append(wrap_que.get_nowait())
                 except Empty:   break
             if verb > 1: print(f' > got {len(resL)} results in {runIX} loop')
 
@@ -346,7 +376,7 @@ def hpmser(
                     name=       name,
                     search_RL=  search_RL,
                     paspa=      paspa,
-                    rad=        rad,
+                    dst_smth=   dst_smth,
                     new_SR=     new_SRL,
                     hpmser_FD=  hpmser_FD)
 
@@ -363,10 +393,10 @@ def hpmser(
         name=       name,
         search_RL=  search_RL,
         paspa=      paspa,
-        rad=        rad,
+        dst_smth=   dst_smth,
         hpmser_FD=  hpmser_FD)
 
-    results = _nice_results_str(name, search_RL, paspa)
+    results = _nice_results_str(name, search_RL, paspa, dst=dst_smth)
     if hpmser_FD:
         with open( f'{hpmser_FD}/{name}/{name}_results.txt', 'w') as file: file.write(results)
 
@@ -374,6 +404,91 @@ def hpmser(
 
     return search_RL
 
+
+def hpmser_analytics(
+        hpmser_FD,
+        dst_smth,
+        prob_max,
+        prob_weighted):
+
+    name = show_hpmser_resuls(hpmser_FD, dst_smth=dst_smth)
+
+    search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
+    print(paspa)
+    print(f'got {len(search_RL)} results')
+    avg_score = sum([p.score for p in search_RL])/len(search_RL)
+    print(f'avg_score: {avg_score}')
+
+    _smooth_and_sort(search_RL, paspa, dst_smth)
+
+    clusters = {}
+    for srIX in range(len(search_RL)):
+        sr = search_RL[srIX]
+        in_cluster = False
+        for ix in clusters:
+            if paspa.dist(sr.point, search_RL[ix].point) <= dst_smth:
+                clusters[ix][1].append(srIX)
+                in_cluster = True
+        if not in_cluster: clusters[srIX] = (sr.smooth_score, [srIX])
+    print(f'\nGot {len(clusters)} clusters')
+    sorted_clusters = list(clusters.keys())
+    sorted_clusters.sort(key= lambda x : clusters[x][0], reverse=True)
+    n = 30
+    if len(clusters) < n: n = len(clusters) // 2
+    print(f'Top {n} clusters:')
+    print(f'id smooth n_in_cluster max min diff')
+    top_srIX = []
+    for cIX in range(n):
+        srIX = sorted_clusters[cIX]
+        top_srIX.append(srIX)
+        sr = search_RL[srIX]
+        cl = clusters[srIX]
+        scores = [search_RL[sIX].score for sIX in clusters[srIX][1]]
+        maxs = max(scores)
+        mins = min(scores)
+        print(f'{sr.id:4d} {cl[0]:.3f} {len(cl[1]):3d} {maxs:.3f} {mins:.3f} {maxs-mins:.3f}')
+
+    print('\n   x', end=' ')
+    for srIX in top_srIX: print(f'{search_RL[srIX].id:4d}', end=' ')
+    print()
+    for srIX in top_srIX:
+        print(f'{search_RL[srIX].id:4d}', end=' ')
+        for srIXB in top_srIX:
+            if srIX != srIXB: print(f'{paspa.dist(search_RL[srIX].point, search_RL[srIXB].point):.2f}', end=' ')
+            else: print('   -', end=' ')
+        print()
+
+    print()
+    print(search_RL[0].score, search_RL[0].smooth_score, search_RL[0].point)
+
+    dim = len(search_RL[0].point)
+    np = 1000
+    num_0 = 0
+    sum_n = 0
+    avg_dist = 0
+    avg_sc = 0
+    for ix in range(np):
+        spoint = _get_opt_sample(
+            paspa=          paspa,
+            search_RL=      search_RL,
+            dst_smpl=       dst_smth,
+            prob_max=       prob_max,
+            prob_weighted=  prob_weighted,
+            n_weighted=     10 + pow(2,dim//2))
+
+        n_close = _num_of_close(spoint, search_RL, paspa, dst_smth)
+        dist = paspa.dist(search_RL[0].point, spoint)
+        smooth_score = _smooth_score(spoint, search_RL, paspa, dst_smth)
+
+        if n_close == 0: num_0 += 1
+        sum_n += n_close
+        avg_dist += dist
+        avg_sc += smooth_score
+
+        print(f'{ix} point got {n_close} n_close, {dist:4.2f} {smooth_score:.3f}')
+
+    print(f'sampling stats:')
+    print(f'n0:{num_0}, nALL:{sum_n}, avg_dist:{avg_dist/np:.3f}, avg_sc:{avg_sc/np}')
 
 def example_hpmser(
         n_proc=     10,
@@ -420,4 +535,4 @@ def example_hpmser(
 if __name__ == '__main__':
 
     #example_hpmser()
-    show_hpmser_resuls('hpmser')
+    show_hpmser_resuls('hpmser', dst_smth=0.2)

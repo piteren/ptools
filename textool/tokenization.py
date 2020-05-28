@@ -8,7 +8,7 @@ import nltk
 import spacy
 import string
 
-SPACY_EN_NLP = spacy.load('en')
+SPACY_EN_NLP = spacy.load('en_core_web_sm')
 
 # separates punctuation with spaces
 def pretokenize_punct(text):
