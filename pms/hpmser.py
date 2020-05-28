@@ -17,8 +17,7 @@
 
 """
 
-from inspect import getfullargspec
-from multiprocessing import Queue, cpu_count
+from multiprocessing import cpu_count
 from queue import Empty
 import os
 import pandas as pd
@@ -135,11 +134,11 @@ def _update_and_save(
 # returns sample closer to local maximum
 def _get_opt_sample(
         paspa :PaSpa,
-        search_RL :List[SeRes]= None,   # ...should be smoothed and sorted!
-        dst_smpl=               0.1,
-        prob_max=               0.4,    # probability of sampling from max area
-        prob_weighted=          0.3,    # probability of weighted sampling from n_weighted samples
-        n_weighted=             100):
+        search_RL :List[SeRes], # ...should be smoothed and sorted!
+        dst_smpl,
+        prob_max,               # probability of sampling from max smooth sample area
+        prob_top,               # probability of weighted sampling from area of n_top samples
+        n_top):
 
     if random.random() < prob_max or not search_RL:
         max_point = search_RL[0].point if search_RL else None
@@ -147,9 +146,16 @@ def _get_opt_sample(
             ref_point=  max_point,
             ax_dst=     dst_smpl)
     else:
-        prob_weighted = prob_weighted / (1 - prob_max) # adjust
-        if random.random() < prob_weighted:
-            spoints = [paspa.sample_point(ref_point=None) for _ in range(n_weighted)] # list of points
+        prob_top = prob_top / (1 - prob_max) # adjust
+        if random.random() < prob_top:
+            if n_top > len(search_RL): n_top = len(search_RL)
+            spoints = []
+            for ix in range(n_top):
+                ref_point = search_RL[ix].point
+                spoint = paspa.sample_point(
+                    ref_point=  ref_point,
+                    ax_dst=     dst_smpl)
+                spoints.append(spoint)
             spw = [_smooth_score(sp, search_RL, paspa, dst_smth=dst_smpl) for sp in spoints] # list of scores
             min_spw = min(spw)
             spw = [w-min_spw for w in spw] # subtract min
@@ -158,17 +164,64 @@ def _get_opt_sample(
 
     return spoint
 
+def _get_clusters(
+        search_RL: List[SeRes], # should be sorted
+        paspa: PaSpa,
+        dst :float):            # distance to classify point as close to another
+    clusters = {}
+    for srIX in range(len(search_RL)):
+        sr = search_RL[srIX]
+        in_cluster = False
+        for ix in clusters:
+            if paspa.dist(sr.point, search_RL[ix].point) <= dst:
+                clusters[ix][1].append(srIX)
+                in_cluster = True
+        if not in_cluster: clusters[srIX] = (sr.smooth_score, [srIX])
+    return clusters
+
 # prepares nice string of results
 def _nice_results_str(
         name,
-        search_RL :List[SeRes],
+        search_RL :List[SeRes], # should be sorted
         paspa :PaSpa,
-        dst :float):       # distance to classify point as close to another
-    results = f'Search run {name} : {len(search_RL)} results by smooth_score:\n\n{paspa}\n\n'
-    results += '  smooth [local] id (n_close) {params...}\n'
+        dst :float,       # distance to classify point as close to another
+        n_clusters=     30):
+    results = f'Search run {name} - {len(search_RL)} results\n\n{paspa}\n'
+
+    clusters = _get_clusters(search_RL, paspa, dst)
+    sorted_clusters = list(clusters.keys())
+    sorted_clusters.sort(key= lambda x : clusters[x][0], reverse=True)
+    if len(clusters) < n_clusters: n_clusters = len(clusters) // 2
+
+    results += f'\nGot {len(clusters)} clusters, top {n_clusters} clusters:\n'
+    results += '  smooth [   local]   id(nicl)   max   min   dif {params...}\n'
+    top_srIX = []
+    for cIX in range(n_clusters):
+        srIX = sorted_clusters[cIX]
+        top_srIX.append(srIX)
+        sr = search_RL[srIX]
+        cl = clusters[srIX]
+        scores = [search_RL[sIX].score for sIX in clusters[srIX][1]]
+        maxs = max(scores)
+        mins = min(scores)
+        results += f'{sr.smooth_score:8.5f} [{sr.score:8.5f}] {sr.id:4d}({len(cl[1]):4d}) {maxs:.3f} {mins:.3f} {maxs-mins:.3f} {PaSpa.point_2str(sr.point)}\n'
+
+    results += '\n   x '
+    for srIX in top_srIX: results += f'{search_RL[srIX].id:4d} '
+    results += '\n'
+    for srIX in top_srIX:
+        results += f'{search_RL[srIX].id:4d} '
+        for srIXB in top_srIX:
+            if srIX != srIXB: results += f'{paspa.dist(search_RL[srIX].point, search_RL[srIXB].point):.2f} '
+            else: results += '   - '
+        results += '\n'
+
+    avg_score = sum([p.score for p in search_RL]) / len(search_RL)
+    results +=f'\nResults by smooth_score (avg_smooth: {avg_score:8.5f}):\n'
+    results += '  smooth [   local]   id(n_cl) {params...}\n'
     for sr in search_RL:
         n_close = _num_of_close(sr.point, search_RL, paspa, dst)
-        results += f'{sr.smooth_score:9.5f} [{sr.score:9.5f}] {sr.id:4d}({n_close:4d}): {PaSpa.point_2str(sr.point)}\n'
+        results += f'{sr.smooth_score:8.5f} [{sr.score:8.5f}] {sr.id:4d}({n_close:4d}) {PaSpa.point_2str(sr.point)}\n'
     return results
 
 # writes 3D graph to html with plotly
@@ -228,27 +281,25 @@ def show_hpmser_resuls(
         dst_smth :float):
 
     results_FDL = sorted(os.listdir(hpmser_FD))
-    name = None
-    if len(results_FDL):
-        rIX = -1
-        if len(results_FDL) > 1:
-            print(f'\nThere are {len(results_FDL)} searches, choose one (default last):')
-            for ix in range(len(results_FDL)):
-                print(f' > {ix:2d}: {results_FDL[ix]}')
-            rIX = input('> ')
-            try:
-                rIX = int(rIX)
-                if rIX > len(results_FDL): rIX = -1
-            except ValueError:
-                rIX = -1
-        name = results_FDL[rIX]
+    rIX = -1
+    if len(results_FDL) > 1:
+        print(f'\nThere are {len(results_FDL)} searches, choose one (default last):')
+        for ix in range(len(results_FDL)):
+            print(f' > {ix:2d}: {results_FDL[ix]}')
+        rIX = input('> ')
+        try:
+            rIX = int(rIX)
+            if rIX > len(results_FDL): rIX = -1
+        except ValueError:
+            rIX = -1
+    name = results_FDL[rIX]
 
-        search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
-        _smooth_and_sort(search_RL, paspa, dst_smth=dst_smth)
+    search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
+    _smooth_and_sort(search_RL, paspa, dst_smth=dst_smth)
 
-        _write_graph(name, search_RL, hpmser_FD, silent=False)
-        print(f'\n{_nice_results_str(name, search_RL, paspa, dst=dst_smth)}')
-    return name
+    _write_graph(name, search_RL, hpmser_FD, silent=False)
+    print(f'\n{_nice_results_str(name, search_RL, paspa, dst=dst_smth)}')
+    return name, search_RL, paspa
 
 # hpms searching function
 @timing
@@ -259,8 +310,9 @@ def hpmser(
         name :str=                  None,   # for None stamp will be used
         add_stamp=                  True,   # adds short stamp to name, when name given
         dst_smth=                   0.1,    # smoothing distance (L1N) (also distance for sampling)
-        prob_max=                   0.6,    # probability of sampling from max area
-        prob_weighted=              0.2,    # probability of weighted sampling from n_weighted samples
+        prob_max=                   0.1,    # probability of sampling from max area
+        prob_top=                   0.5,    # probability of weighted sampling from n_weighted samples
+        n_top=                      10,
         def_kwargs :dict=           None,   # func kwargs
         devices=                    None,   # devices to use for search
         use_all_cores=              True,   # True: when devices is None >> uses all cores, otherwise as set by devices
@@ -304,7 +356,7 @@ def hpmser(
 
     if verb > 0:
         print(f'\n*** hpmser *** {name} started for {func.__name__} ...')
-        print(f'    dst_smth {dst_smth}, prob_max {prob_max}, prob_weighted {prob_weighted}')
+        print(f'    dst_smth {dst_smth}, prob_max {prob_max}, prob_top {prob_top}')
         if continue_last and search_RL: print(f'    search will continue with {len(search_RL)} results...')
 
     if not paspa:
@@ -338,8 +390,8 @@ def hpmser(
                     search_RL=      search_RL,
                     dst_smpl=       dst_smth,
                     prob_max=       prob_max,
-                    prob_weighted=  prob_weighted,
-                    n_weighted=     10 + pow(2,len(psd)//2))
+                    prob_top=       prob_top,
+                    n_top=          n_top)
                 loop_func(
                     func=       func,
                     device=     devices.pop(0),
@@ -405,76 +457,28 @@ def hpmser(
     return search_RL
 
 
-def hpmser_analytics(
+def example_hpmser_smpl(
+        n_samples,
         hpmser_FD,
         dst_smth,
         prob_max,
-        prob_weighted):
+        prob_top,
+        n_top):
 
-    name = show_hpmser_resuls(hpmser_FD, dst_smth=dst_smth)
+    name, search_RL, paspa = show_hpmser_resuls(hpmser_FD, dst_smth=dst_smth)
 
-    search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
-    print(paspa)
-    print(f'got {len(search_RL)} results')
-    avg_score = sum([p.score for p in search_RL])/len(search_RL)
-    print(f'avg_score: {avg_score}')
-
-    _smooth_and_sort(search_RL, paspa, dst_smth)
-
-    clusters = {}
-    for srIX in range(len(search_RL)):
-        sr = search_RL[srIX]
-        in_cluster = False
-        for ix in clusters:
-            if paspa.dist(sr.point, search_RL[ix].point) <= dst_smth:
-                clusters[ix][1].append(srIX)
-                in_cluster = True
-        if not in_cluster: clusters[srIX] = (sr.smooth_score, [srIX])
-    print(f'\nGot {len(clusters)} clusters')
-    sorted_clusters = list(clusters.keys())
-    sorted_clusters.sort(key= lambda x : clusters[x][0], reverse=True)
-    n = 30
-    if len(clusters) < n: n = len(clusters) // 2
-    print(f'Top {n} clusters:')
-    print(f'id smooth n_in_cluster max min diff')
-    top_srIX = []
-    for cIX in range(n):
-        srIX = sorted_clusters[cIX]
-        top_srIX.append(srIX)
-        sr = search_RL[srIX]
-        cl = clusters[srIX]
-        scores = [search_RL[sIX].score for sIX in clusters[srIX][1]]
-        maxs = max(scores)
-        mins = min(scores)
-        print(f'{sr.id:4d} {cl[0]:.3f} {len(cl[1]):3d} {maxs:.3f} {mins:.3f} {maxs-mins:.3f}')
-
-    print('\n   x', end=' ')
-    for srIX in top_srIX: print(f'{search_RL[srIX].id:4d}', end=' ')
-    print()
-    for srIX in top_srIX:
-        print(f'{search_RL[srIX].id:4d}', end=' ')
-        for srIXB in top_srIX:
-            if srIX != srIXB: print(f'{paspa.dist(search_RL[srIX].point, search_RL[srIXB].point):.2f}', end=' ')
-            else: print('   -', end=' ')
-        print()
-
-    print()
-    print(search_RL[0].score, search_RL[0].smooth_score, search_RL[0].point)
-
-    dim = len(search_RL[0].point)
-    np = 1000
     num_0 = 0
     sum_n = 0
     avg_dist = 0
     avg_sc = 0
-    for ix in range(np):
+    for ix in range(n_samples):
         spoint = _get_opt_sample(
             paspa=          paspa,
             search_RL=      search_RL,
             dst_smpl=       dst_smth,
             prob_max=       prob_max,
-            prob_weighted=  prob_weighted,
-            n_weighted=     10 + pow(2,dim//2))
+            prob_top=       prob_top,
+            n_top=          n_top)
 
         n_close = _num_of_close(spoint, search_RL, paspa, dst_smth)
         dist = paspa.dist(search_RL[0].point, spoint)
@@ -485,10 +489,11 @@ def hpmser_analytics(
         avg_dist += dist
         avg_sc += smooth_score
 
-        print(f'{ix} point got {n_close} n_close, {dist:4.2f} {smooth_score:.3f}')
+        print(f'{ix} point got {n_close} n_close, {dist:4.2f} {smooth_score:8.5f}')
 
     print(f'sampling stats:')
-    print(f'n0:{num_0}, nALL:{sum_n}, avg_dist:{avg_dist/np:.3f}, avg_sc:{avg_sc/np}')
+    print(f'n0:{num_0}, nALL:{sum_n}, avg_dist:{avg_dist/n_samples:.3f}, avg_sc:{avg_sc/n_samples}')
+
 
 def example_hpmser(
         n_proc=     10,
@@ -535,4 +540,10 @@ def example_hpmser(
 if __name__ == '__main__':
 
     #example_hpmser()
-    show_hpmser_resuls('hpmser', dst_smth=0.2)
+    example_hpmser_smpl(
+        n_samples=      1000,
+        hpmser_FD=      '_hpmser',
+        dst_smth=       0.05,
+        prob_max=       0.1,
+        prob_top=       0.5,
+        n_top=          10)
