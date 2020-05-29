@@ -3,6 +3,7 @@
  2018 (c) piteren
 
     PaSpa - parameters space
+
         - each parameter (key) defines an axis of space
         - each axis has:
             - type (list - continuous, tuple - discrete)
@@ -12,10 +13,19 @@
         PaSpa is a metric space (https://en.wikipedia.org/wiki/Metric_space)
         - PaSpa uses L1N distance (Manhattan Distance with axis width normalized to 1, finally normalized by dimm (num of axes))
 
-
         PaSpa defines a point in space (self)
         - point in the space is a dict {key:value} key - axis of space, value - point on axis
         PaSpa samples (random) points from space and may be forced to sample points from within a given distance
+
+        PaSpa has:
+            - dim - dimensionality (num of axes)
+            - rdimm - reduced dimensionality (rdim<=dim - since some axes are simpler(tuples, lists of ints))
+                to calc rdim:
+                    rdim = log10(∏ axd) (for all axes)
+                        axd for axis:
+                        = 10                        :list of floats
+                        = 10                        :tuple or list of ints when len(ax_elements) >=1000)
+                        = 1+log10(len(ax elements)) :tuple or list of ints when len(ax elements) < 1000
 
         PaSpa is build from psd (dict):
             psd - {axis(parameter name): list or tuple}
@@ -283,3 +293,5 @@ if __name__ == '__main__':
     }
 
     example_paspa(rgs)
+
+

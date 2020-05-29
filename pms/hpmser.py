@@ -3,17 +3,25 @@
  2020 (c) piteren
 
     hpmser - hyperparameters searching function
-        > searches hyperparameters space to MAXIMIZE the score
+        > searches hyperparameters space to MAXIMIZE the SCORE
+
+        MAXIMIZE the SCORE == find cluster with:
+         - high smooth_score of center
+         - high lowest smooth_score
+         - small dst
+         - high num of points
+
+         policy of sampling the space is crucial, it determines the speed, top result and convergence of the function
+         in general it is a...
 
     parameters:
 
         func - input function:
-            > may have optional ‘device’ or ‘devices’ parameter - for NN, to run on given device
-            > case of stochastic score for given hpms must be implemented of func (calculate many and average)
+            > may have optional ‘device’ or ‘devices’ parameter - for NN, to run on given CUDA device
             > returns: a dict with ‘score’ key or a single value (score)
         psd - dictionary with parameters space to search in, check PaSpa @putils.neuralmess.params_dict
         def_kwargs - dict with other parameters of func
-        devices - devices to use by hpmser, for syntax check @putils.neuralmess.dev_manager
+        devices - devices to use by hpmser, (syntax: check @ptools.neuralmess.dev_manager)
 
 """
 
