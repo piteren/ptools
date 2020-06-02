@@ -16,6 +16,7 @@ def inner_func_H(
         func,
         device,
         spoint,
+        est_score,
         s_time,
         **kwargs):
 
@@ -32,6 +33,7 @@ def inner_func_H(
     return {
         'device':       device,
         'spoint':       spoint,
+        'est_score':    est_score,
         's_time':       s_time,
         'score':        score}
 

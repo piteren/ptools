@@ -41,6 +41,7 @@
                     'f':    [-3,3.0]    }
 """
 
+import math
 import time
 import random
 
@@ -55,8 +56,9 @@ class PaSpa:
             verb=               0):
 
         self.psd = psd
+        self.dim = len(self.psd)
         self.seed_counter = seed if seed is not None else time.time()
-        if verb > 0:  print(f'\n*** PaSpa *** ({len(self.psd)} dim) inits with seed {self.seed_counter} ...')
+        if verb > 0:  print(f'\n*** PaSpa *** (dim: {self.dim}) inits with seed {self.seed_counter} ...')
 
         # some safety check and resolve Type and Width
         self.psd_T = {} # axis space type
@@ -87,6 +89,23 @@ class PaSpa:
             self.psd_T[axis] = tp+tpn # string like 'list_int'
             self.psd_W[axis] = param_def[-1]-param_def[0] if tpn != '_diff' else len(param_def)-1
 
+        axd = []
+        for axis in self.psd:
+            if 'list' in self.psd_T[axis]:
+                if 'float' in self.psd_T[axis]: axd.append(10)
+                else:
+                    wd = self.psd_W[axis]
+                    if wd >= 1000: axd.append(10)
+                    else: axd.append(math.log10(wd))
+            else:
+                wd = len(self.psd[axis])
+                if wd >= 1000: axd.append(10)
+                else: axd.append(math.log10(wd))
+        mul = 1
+        for e in axd: mul *= e
+        self.rdim = math.log10(mul)
+        if verb > 0:  print(f' > PaSpa rdim: {self.rdim:.1f}')
+
         self.str_W = {} # formatting width for axes
         for axis in self.psd:
             if 'tuple' in self.psd_T[axis]:
@@ -109,6 +128,7 @@ class PaSpa:
                     max_fw = 3
                     if self.psd[axis][1] < 0.01: max_fw = 6
                     self.str_W[axis] = max_dw + 1 + max_fw
+
 
     # checks if given value belongs to an axis of space
     def __is_in_axis(
@@ -222,6 +242,25 @@ class PaSpa:
         if ref_point is None: ref_point = {key: None for key in self.psd.keys()}
         return {key: self.__get_pval(key, ref_point[key], ax_dst) for key in self.psd.keys()}
 
+    # samples 2 points distanced with 1 (opposite corner points)
+    def sample_corners(
+            self):
+
+        pa = {}
+        pb = {}
+        axes = list(self.psd.keys())
+        left = [0 if random.random()>0.5 else 1 for _ in range(self.dim)] # left/right
+        for aIX in range(len(axes)):
+            ax = axes[aIX]
+            vl = self.psd[ax][0]
+            vr = self.psd[ax][-1]
+            pa[ax] = vl
+            pb[ax] = vr
+            if left[aIX]:
+                pa[ax] = vr
+                pb[ax] = vl
+        return pa, pb
+
     # point -> nicely formatted string
     def point_2str(self, p :dict) -> str:
         s = '{'
@@ -235,7 +274,7 @@ class PaSpa:
 
     # returns info(string) about self
     def __str__(self):
-        info = f'*** PaSpa *** {len(self.psd)} parameters space:\n'
+        info = f'*** PaSpa *** (dim: {self.dim}, rdim: {self.rdim:.1f}) parameters space:\n'
         max_ax_l = 0
         max_ps_l = 0
         for axis in sorted(list(self.psd.keys())):

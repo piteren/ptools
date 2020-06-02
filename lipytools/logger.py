@@ -15,7 +15,7 @@ class Logger:
             self,
             fileName):
         self.terminal = sys.stdout
-        self.log = open(fileName, 'a')
+        self.log = open(fileName, 'a', encoding='utf-8')
 
     def write(self, message):
         self.terminal.write(message)
