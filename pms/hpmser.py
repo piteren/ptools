@@ -3,16 +3,17 @@
  2020 (c) piteren
 
     hpmser - hyperparameters searching function
-        > searches hyperparameters space to MAXIMIZE the SCORE
+        > searches hyperparameters space to MAXIMIZE the SCORE for func
 
-        MAXIMIZE the SCORE == find cluster with:
-         - high smooth_score of center
-         - high lowest smooth_score
+        MAXIMIZE the SCORE == find points cluster with:
+         - high smooth_score
+         - high lowest score
          - small dst
          - high num of points
 
-         policy of sampling the space is crucial, it determines the speed, top result and convergence of the function
-         in general it is a...
+         policy of sampling the space is crucial, it determines the speed, top result and convergence of the hpmser
+         - fully random sampling is slow and wastes a lot of computing power and time
+         - too aggressive sampling may undersample the space and miss the MAX
 
     parameters:
 
@@ -25,20 +26,28 @@
 
 """
 
+#TODO:
+# - add TB to hpmser
+# - add GX to hpmser
+# - add graphs as reports
+
+
 from multiprocessing import cpu_count
-from queue import Empty
 import os
 import pandas as pd
 import plotly.express as px
 import random
+import sys, select
 import time
 from typing import Callable, List
 
 from ptools.lipytools.decorators import timing
 from ptools.lipytools.little_methods import stamp, w_pickle, r_pickle
+from ptools.neuralmess.dev_manager import nestarter
 from ptools.pms.paspa import PaSpa
 from ptools.pms.hpmser_wraps import interface_wrap_H, interface_wrap_MP_H, wrap_que
 
+NP_SMOOTH = [2,3,5,9] # numbers of points for smoothing
 
 # single search result
 class SeRes:
@@ -52,185 +61,190 @@ class SeRes:
         self.id = id
         self.point = point
         self.score = score
-        self.smooth_score = None
+        self.smooth_score = score # default, to be updated
 
 
-# number of points in search_RL closer than dst to given point
-def _num_of_close(
-        point :dict,
-        search_RL :List[SeRes],
-        paspa :PaSpa,
-        dst: float):            # distance to classify point as close to another
-    n_close = 0
-    for p in search_RL:
-        if paspa.dist(p.point, point) <= dst: n_close += 1
-    return n_close
-
-# returns smooth score for given point in relation to other in search_RL
+# calculates smooth score for given point (+ avg distance and all scores)
 def _smooth_score(
         point :dict,
         search_RL :List[SeRes],
         paspa :PaSpa,
-        dst_smth: float):
+        np_smooth :int):        # n points 4 smooth, should be > 0
 
-    tot_weight = 0
-    s_val = 0
-    for zix in range(len(search_RL)):
-        dst = paspa.dist(point, search_RL[zix].point)
-        weight = (dst_smth-dst) / dst_smth
-        if weight < 0: weight = 0
-        s_val += search_RL[zix].score * weight
-        tot_weight += weight
+    # case: no points in search_RL
+    ss_np = 0
+    avg_dst = 1
+    all_scores = [0]
 
-    if tot_weight > 0: s_val /= tot_weight
-    # no neighbour points >> average of all
-    else:
-        accs = [sr.score for sr in search_RL]
-        s_val = sum(accs) / len(accs)
-    return s_val
+    if search_RL:
+
+        sd = [[search_RL[srIX].score, paspa.dist(point, search_RL[srIX].point)] for srIX in range(len(search_RL))] # [[score,dist],..]
+        sd.sort(key= lambda x: x[1]) # sort by distance to this point
+        sd_np = sd[:np_smooth+1] # trim (+1 point for reference)
+
+        # one/two points case
+        if len(sd_np) < 3:
+            ss_np = sd_np[0][0] # closest point score
+            all_scores = [ss_np]
+        else:
+            all_scores, all_dst = zip(*sd_np) # scores, distances
+
+            max_dst = all_dst[-1] # distance of last point
+
+            # trim them
+            all_dst = all_dst[:-1]
+            all_scores = all_scores[:-1]
+
+            weights = [(max_dst-d)/max_dst for d in all_dst] # <1;0)
+            wall_scores = [all_scores[ix]*weights[ix] for ix in range(len(all_scores))] # weighted scores
+
+            ss_np = sum(wall_scores) / sum(weights)
+            avg_dst = sum(all_dst) / len(all_dst)
+
+    return ss_np, avg_dst, all_scores
 
 # smooths search_RL (updates .smooth_score)
 def _smooth_RL(
         search_RL: List[SeRes],
         paspa :PaSpa,
-        dst_smth: float):
+        np_smooth :int):
 
+    avg_dst = []
     for six in range(len(search_RL)):
-        search_RL[six].smooth_score = _smooth_score(
+        search_RL[six].smooth_score, ad, _ = _smooth_score(
             point=      search_RL[six].point,
             search_RL=  search_RL,
             paspa=      paspa,
-            dst_smth=   dst_smth)
+            np_smooth=  np_smooth)
+        avg_dst.append(ad)
+    return sum(avg_dst) / len(avg_dst)
 
 # smooths & sorts
 def _smooth_and_sort(
         search_RL :List[SeRes],
         paspa :PaSpa,
-        dst_smth :float):
-    _smooth_RL(
+        np_smooth :int):
+    avg_dst = _smooth_RL(
         search_RL=  search_RL,
         paspa=      paspa,
-        dst_smth=   dst_smth)
+        np_smooth=  np_smooth)
     search_RL.sort(key=lambda x: x.smooth_score, reverse=True)
+    return avg_dst
 
-# updates list, smooths, sorts, writes
+# updates list, smooths, sorts, writes with backup
 def _update_and_save(
         name,
         search_RL :List[SeRes],
         paspa :PaSpa,
-        dst_smth :float,
+        np_smooth :int,
         new_SR :SeRes or List[SeRes]=   None,
         hpmser_FD :str=                 None):
 
+    # add new
     if new_SR:
         if type(new_SR) is not list: new_SR = [new_SR]
         search_RL += new_SR
 
-    _smooth_and_sort(
+    avg_dst = _smooth_and_sort(
         search_RL=  search_RL,
         paspa=      paspa,
-        dst_smth=   dst_smth)
+        np_smooth=  np_smooth)
 
     if hpmser_FD:
+
+        # backup copy previous
+        old_res = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
+        if old_res: w_pickle(old_res, f'{hpmser_FD}/{name}/{name}_results.srl.backup')
+
         w_pickle((search_RL, paspa), f'{hpmser_FD}/{name}/{name}_results.srl')
         _write_graph(
             name=       name,
             search_RL=  search_RL,
             hpmser_FD=  hpmser_FD)
-    return search_RL
 
-# returns sample closer to local maximum
+    return search_RL, avg_dst
+
+# string from list of weights
+def _str_weights(all_w :list):
+    ws = '['
+    if len(all_w) > 5:
+        for w in all_w[:3]: ws += f'{w:.4f} '
+        ws += '.. '
+        for w in all_w[-2:]: ws += f'{w:.4f} '
+    else:
+        for w in all_w: ws += f'{w:.4f} '
+    return f'{ws[:-1]}]'
+
+# returns sample with policy and estimated score
 def _get_opt_sample(
         paspa :PaSpa,
         search_RL :List[SeRes], # ...should be smoothed and sorted!
-        dst_smpl,
-        prob_max,               # probability of sampling from max smooth sample area
-        prob_top,               # probability of weighted sampling from area of n_top samples
-        n_top):
+        np_smooth :int,
+        prob_opt,               # probability of optimized sample
+        n_opt,                  # number of optimized samples
+        prob_top,               # probability of sample from area of top
+        n_top,                  # number of top samples
+        avg_dst):               # distance for sample from area of top
 
-    if random.random() < prob_max or not search_RL:
-        max_point = search_RL[0].point if search_RL else None
-        spoint = paspa.sample_point(
-            ref_point=  max_point,
-            ax_dst=     dst_smpl)
+    prob_rnd = 1 - prob_opt - prob_top
+    if random.random() < prob_rnd or len(search_RL) < 10:
+        sample = paspa.sample_point() # rnd sample
     else:
-        prob_top = prob_top / (1 - prob_max) # adjust
-        if random.random() < prob_top:
+        if random.random() < prob_top/(prob_top+prob_opt):
+            n_top += 1 # last for reference
             if n_top > len(search_RL): n_top = len(search_RL)
-            spoints = []
-            for ix in range(n_top):
-                ref_point = search_RL[ix].point
-                spoint = paspa.sample_point(
-                    ref_point=  ref_point,
-                    ax_dst=     dst_smpl)
-                spoints.append(spoint)
-            spw = [_smooth_score(sp, search_RL, paspa, dst_smth=dst_smpl) for sp in spoints] # list of scores
-            min_spw = min(spw)
-            spw = [w-min_spw for w in spw] # subtract min
-            spoint = random.choices(spoints, weights=spw, k=1)[0]
-        else: spoint = paspa.sample_point(ref_point=None) # sample from whole space
+            points = [paspa.sample_point(search_RL[ix].point, ax_dst=avg_dst) for ix in range(n_top)] # top points
+        else:
+            points = [paspa.sample_point() for _ in range(n_opt+1)] # opt points (last for reference)
 
-    return spoint
+        scores = [_smooth_score(p, search_RL, paspa, np_smooth)[0] for p in points]
 
-def _get_clusters(
-        search_RL: List[SeRes], # should be sorted
-        paspa: PaSpa,
-        dst :float):            # distance to classify point as close to another
-    clusters = {}
-    for srIX in range(len(search_RL)):
-        sr = search_RL[srIX]
-        in_cluster = False
-        for ix in clusters:
-            if paspa.dist(sr.point, search_RL[ix].point) <= dst:
-                clusters[ix][1].append(srIX)
-                in_cluster = True
-        if not in_cluster: clusters[srIX] = (sr.smooth_score, [srIX])
-    return clusters
+        all_pw = list(zip(points, scores))
+        all_pw.sort(key=lambda x: x[1], reverse=True)
+        maxs = all_pw[0][1]
+        subs = all_pw.pop(-1)[1]
+        mins = all_pw[-1][1]
 
-# prepares nice string of results
+        all_p, all_w = zip(*all_pw)
+        all_w = [w - subs for w in all_w]
+        all_p = list(all_p)
+        sample = random.choices(all_p, weights=all_w, k=1)[0]
+        print(f'   % sampled #{all_p.index(sample)}/{len(all_p)} from: {maxs:.4f}-{mins:.4f} {_str_weights(all_w)}')
+
+    est_score, _, _ =  _smooth_score(sample, search_RL, paspa, np_smooth)
+
+    return sample, est_score
+
+# prepares nice string results
 def _nice_results_str(
         name,
-        search_RL :List[SeRes], # should be sorted
+        search_RL :List[SeRes], # should be sorted and smoothed
         paspa :PaSpa,
-        dst :float,             # distance to classify point as close to another
-        n_clusters=     30):
-    results = f'Search run {name} - {len(search_RL)} results (dst_smth: {dst})\n\n{paspa}\n'
+        n_top=                  20,
+        all_nps :int or None=   3):
 
-    clusters = _get_clusters(search_RL, paspa, dst)
-    sorted_clusters = list(clusters.keys())
-    sorted_clusters.sort(key= lambda x : clusters[x][0], reverse=True)
-    if len(clusters) < n_clusters: n_clusters = len(clusters) // 2
+    re_str = ''
+    if all_nps:
+        re_str += f'Search run {name} - {len(search_RL)} results (by smooth_score):\n\n{paspa}\n\n'
+        re_str += '  id smooth [ local] [  max-min  ] avg_dst {params...}\n\n'
 
-    results += f'\nGot {len(clusters)} clusters, top {n_clusters} clusters:\n'
-    results += '  smooth [   local]   id(nicl)   max   min   dif {params...}\n'
-    top_srIX = []
-    for cIX in range(n_clusters):
-        srIX = sorted_clusters[cIX]
-        top_srIX.append(srIX)
-        sr = search_RL[srIX]
-        cl = clusters[srIX]
-        scores = [search_RL[sIX].score for sIX in clusters[srIX][1]]
-        maxs = max(scores)
-        mins = min(scores)
-        results += f'{sr.smooth_score:8.5f} [{sr.score:8.5f}] {sr.id:4d}({len(cl[1]):4d}) {maxs:.3f} {mins:.3f} {maxs-mins:.3f} {paspa.point_2str(sr.point)}\n'
+    if len(search_RL) < n_top: n_top = len(search_RL)
+    for nps in NP_SMOOTH:
+        avg_dst = _smooth_and_sort(search_RL, paspa, nps)
+        re_str += f'TOP {n_top} results for NPS {nps} (avg_dst:{avg_dst:.3f}):\n'
+        for srIX in range(n_top):
+            sr = search_RL[srIX]
+            ss_np, avg_dst, all_scores = _smooth_score(sr.point, search_RL, paspa, nps)
+            re_str += f'{sr.id:4d} {ss_np:.4f} [{sr.score:.4f}] [{max(all_scores):.4f}-{min(all_scores):.4f}] {avg_dst:.3f} {paspa.point_2str(sr.point)}\n'
 
-    results += '\n   x '
-    for srIX in top_srIX: results += f'{search_RL[srIX].id:4d} '
-    results += '\n'
-    for srIX in top_srIX:
-        results += f'{search_RL[srIX].id:4d} '
-        for srIXB in top_srIX:
-            if srIX != srIXB: results += f'{paspa.dist(search_RL[srIX].point, search_RL[srIXB].point):.2f} '
-            else: results += '   - '
-        results += '\n'
+    if all_nps and len(search_RL) > n_top:
+        avg_dst = _smooth_and_sort(search_RL, paspa, all_nps)
+        re_str += f'\nALL results for NPS {all_nps} (avg_dst:{avg_dst:.3f}):\n'
+        for sr in search_RL:
+            ss_np, avg_dst, all_scores = _smooth_score(sr.point, search_RL, paspa, all_nps)
+            re_str += f'{sr.id:4d} {ss_np:.4f} [{sr.score:.4f}] [{max(all_scores):.4f}-{min(all_scores):.4f}] {avg_dst:.3f} {paspa.point_2str(sr.point)}\n'
 
-    avg_score = sum([p.score for p in search_RL]) / len(search_RL)
-    results +=f'\nResults by smooth_score (avg_smooth: {avg_score:8.5f}):\n'
-    results += '  smooth [   local]   id(n_cl) {params...}\n'
-    for sr in search_RL:
-        n_close = _num_of_close(sr.point, search_RL, paspa, dst)
-        results += f'{sr.smooth_score:8.5f} [{sr.score:8.5f}] {sr.id:4d}({n_close:4d}) {paspa.point_2str(sr.point)}\n'
-    return results
+    return re_str
 
 # writes 3D graph to html with plotly
 def _write_graph(
@@ -283,10 +297,8 @@ def _write_graph(
     file = f'{hpmser_FD}/{name}/{name}_results.html'
     fig.write_html(file, auto_open=False if os.path.isfile(file) else True)
 
-# load results, show graph and save, print results
-def show_hpmser_resuls(
-        hpmser_FD :str,
-        dst_smth :float):
+# loads results, shows graph and saves, prints results
+def show_hpmser_resuls(hpmser_FD :str):
 
     results_FDL = sorted(os.listdir(hpmser_FD))
     rIX = -1
@@ -303,76 +315,117 @@ def show_hpmser_resuls(
     name = results_FDL[rIX]
 
     search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
-    paspa = PaSpa(paspa.psd)  # TODO: delete << (legacy ...for old paspa)
-    print(f'\n{paspa}')
-    _smooth_and_sort(search_RL, paspa, dst_smth=dst_smth)
 
     _write_graph(name, search_RL, hpmser_FD, silent=False)
-    print(f'\n{_nice_results_str(name, search_RL, paspa, dst=dst_smth)}')
+
+    print(f'\n{paspa}')
+    print(f'\n{_nice_results_str(name, search_RL, paspa)}')
     return name, search_RL, paspa
+
+# reads/updates config file
+def update_config(
+        hpmser_FD,
+        name,
+        np_smooth :int,
+        prob_opt :float,
+        n_opt :int,
+        prob_top :float,
+        n_top :int):
+
+    cf_path = f'{hpmser_FD}/{name}/hpms.conf'
+    write_file = True
+
+    if os.path.isfile(cf_path):
+        with open(cf_path) as cfile:
+            vals = cfile.read()
+            vals = vals.split()
+            new_np_smooth = int(vals[0])
+            new_prob_opt =  float(vals[1])
+            new_n_opt =     int(vals[2])
+            new_prob_top =  float(vals[3])
+            new_n_top =     int(vals[4])
+
+        if  new_np_smooth == np_smooth and \
+            new_prob_opt  == prob_opt and \
+            new_n_opt     == n_opt and \
+            new_prob_top  == prob_top and \
+            new_n_top     == n_top:
+            write_file = False
+        else:
+            np_smooth = new_np_smooth
+            prob_opt = new_prob_opt
+            n_opt = new_n_opt
+            prob_top = new_prob_top
+            n_top = new_n_top
+
+    if write_file:
+        with open(cf_path, 'w') as cfile:
+            cfile.write(f'{np_smooth} {prob_opt} {n_opt} {prob_top} {n_top}')
+
+    return {
+        'np_smooth':    np_smooth,
+        'prob_opt':     prob_opt,
+        'n_opt':        n_opt,
+        'prob_top':     prob_top,
+        'n_top':        n_top}
 
 # hpms searching function
 @timing
 def hpmser(
-        func :Callable,                     # function which parameters need to be optimized
-        psd :dict,                          # dictionary defining the space of parameters
-        continue_last=              False,  # flag to continue last search from hpmser_FD
-        name :str=                  None,   # for None stamp will be used
-        add_stamp=                  True,   # adds short stamp to name, when name given
-        dst_smth=                   0.1,    # smoothing distance (L1N) (also distance for sampling)
-        prob_max=                   0.1,    # probability of sampling from max area
-        prob_top=                   0.5,    # probability of weighted sampling from n_weighted samples
-        n_top=                      10,
-        def_kwargs :dict=           None,   # func kwargs
-        devices=                    None,   # devices to use for search
-        use_all_cores=              True,   # True: when devices is None >> uses all cores, otherwise as set by devices
-        subprocess=                 True,   # True: runs func in subprocesses, otherwise in this process
-        n_loops=                    None,   # limit for number of search loops
-        hpmser_FD : str or bool=    None,   # folder, where save search results and html, for None does not save, for True uses default
+        func :Callable,                             # function which parameters need to be optimized, has to return score or {'score': score}
+        psd :dict,                                  # dictionary defining the space of parameters
+        name :str=                  None,           # for None stamp will be used
+        add_stamp=                  True,           # adds short stamp to name, when name given
+        np_smooth :int=             3,              # number of points for smoothing
+        prob_opt=                   0.5,            # probability of optimized sample
+        n_opt=                      50,             # number of optimized samples
+        prob_top=                   0.0,            # probability of sample from area of top
+        n_top=                      20,             # number of top samples
+        def_kwargs :dict=           None,           # func kwargs (~constants)
+        devices=                    None,           # devices to use for search
+        use_all_cores=              True,           # True: when devices is None >> uses all cores, otherwise as set by devices
+        subprocess=                 True,           # True: runs func in subprocesses, otherwise in this process
+        n_loops=                    None,           # limit for number of search loops
+        hpmser_FD : str or bool=    None,           # folder, where save search results and html, for None does not save, for True uses default
+        use_config=                 True,           # uses config file to set/log settings
+        top_show_freq=              20,
         verb=                       1):
 
     # manage hpmser_FD, create if needed
     if hpmser_FD is True: hpmser_FD = 'hpmser' # default for True
-    if not os.path.isdir(hpmser_FD):
-        os.mkdir(hpmser_FD)
-        continue_last = False
+    if not os.path.isdir(hpmser_FD): os.mkdir(hpmser_FD)
 
+    # defaults
+    if not name: name = stamp()
+    elif add_stamp: name = f'{stamp(letters=0)}_{name}'
     search_RL = []
-    max_SR = None
     paspa = None
 
-    if continue_last:
-        results_FDL = sorted(os.listdir(hpmser_FD))
-        if len(results_FDL):
-            if len(results_FDL) > 1:
-                print(f'\nThere are {len(results_FDL)} searches:')
-                for ix in range(len(results_FDL)): print(f' > {ix:2d}: {results_FDL[ix]}')
-            print(f'will continue with the last one')
-            name = results_FDL[-1] # take last
+    # check for continuation
+    results_FDL = sorted(os.listdir(hpmser_FD))
+    if len(results_FDL):
+        print(f'\nThere are {len(results_FDL)} searches in hpmser_FD, do you want to continue with the last one ({results_FDL[-1]}) ..waiting 10 sec (y/n, n-default)?')
+        i, o, e = select.select([sys.stdin], [], [], 10)
+        if not i: i = 'n'
+        else: i = sys.stdin.readline().strip()
+        if i == 'y':
+            name = results_FDL[-1]  # take last
+            try:    search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
+            except: search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl.backup')
+            _smooth_and_sort(search_RL, paspa, np_smooth)
 
-            search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
+    subfolder = f'{hpmser_FD}/{name}'
+    if not os.path.isdir(subfolder): os.mkdir(subfolder)
 
-            search_RL = sorted(search_RL, key=lambda x: x.smooth_score, reverse=True)  # sort
-            max_SR = search_RL[0]
-    else:
-        if not name: name = stamp()
-        elif add_stamp: name = f'{stamp(letters=0)}_{name}'
-
-        # create subfolder if needed
-        subfolder = f'{hpmser_FD}/{name}'
-        if not os.path.isdir(subfolder):
-            os.mkdir(subfolder)
-            continue_last = False
+    nestarter(log_folder=subfolder, custom_name=name, devices=False)
 
     if verb > 0:
-        print(f'\n*** hpmser *** {name} started for {func.__name__} ...')
-        print(f'    dst_smth {dst_smth}, prob_max {prob_max}, prob_top {prob_top}')
-        if continue_last and search_RL: print(f'    search will continue with {len(search_RL)} results...')
+        print(f'\n*** hpmser *** {name} started for: {func.__name__}, conf: {np_smooth} {prob_opt:.1f} {n_opt} {prob_top:.1f} {n_top}')
+        if search_RL: print(f' search will continue with {len(search_RL)} results...')
 
     if not paspa:
         paspa = PaSpa(
             psd=    psd,
-            seed=   None,
             verb=   verb-1)
     if verb>0: print(f'\n{paspa}\n')
 
@@ -388,77 +441,121 @@ def hpmser(
     for k in psd:
         if k in def_kwargs: def_kwargs.pop(k)
 
-    runIX = len(search_RL)
+    cpa, cpb = paspa.sample_corners()
+    avg_dst = 1
+
+    cr_ID = len(search_RL)
+    sample_num = cr_ID
+
+    max_run_ID = None if not cr_ID else search_RL[0].id
+    prev_max_run_ID = None
     try:
         while True:
 
-            if verb>1: print(f' > got {len(devices)} devices at {runIX} loop start')
+            if use_config:
+                config = update_config(hpmser_FD, name, np_smooth, prob_opt, n_opt, prob_top, n_top)
+                np_smooth = config['np_smooth']
+                prob_opt =  config['prob_opt']
+                n_opt =     config['n_opt']
+                prob_top =  config['prob_top']
+                n_top =     config['n_top']
+
             # use all available devices
             while devices:
-                spoint = _get_opt_sample(
-                    paspa=          paspa,
-                    search_RL=      search_RL,
-                    dst_smpl=       dst_smth,
-                    prob_max=       prob_max,
-                    prob_top=       prob_top,
-                    n_top=          n_top)
+                if verb > 1: print(f' > got {len(devices)} devices at {cr_ID} loop start')
+                spoint = None
+                est_score = 0
+                if sample_num == 0: spoint = cpa # use corner point a
+                if sample_num == 1: spoint = cpb # use corner point b
+                if sample_num > 1:
+                    spoint, est_score = _get_opt_sample(
+                        paspa=          paspa,
+                        search_RL=      search_RL,
+                        np_smooth=      np_smooth,
+                        prob_opt=       prob_opt,
+                        n_opt=          n_opt,
+                        prob_top=       prob_top,
+                        n_top=          n_top,
+                        avg_dst=        avg_dst)
+                sample_num += 1
+
                 loop_func(
                     func=       func,
                     device=     devices.pop(0),
                     spoint=     spoint,
+                    est_score=  est_score,
                     s_time=     time.time(),
                     **def_kwargs)
 
-            print('got here also...')
-            # flush que
-            resL = [wrap_que.get()] # at least one
-            while True:
-                try:            resL.append(wrap_que.get_nowait())
-                except Empty:   break
-            if verb > 1: print(f' > got {len(resL)} results in {runIX} loop')
+            # get from que at least one
+            res = wrap_que.get()
+            devices.append(res['device'])   # return device
+            sr = SeRes(                     # add new point with results
+                id=     cr_ID,
+                point=  res['spoint'],
+                score=  res['score'])
 
-            # manage results
-            new_SRL = []
-            for res in resL:
-                devices.append(res['device'])   # return device
-                new_SR = SeRes(           # add new point with results
-                    id=     runIX,
-                    point=  res['spoint'],
-                    score=  res['score'])
-                new_SRL.append(new_SR)
-                runIX += 1
+            search_RL, avg_dst = _update_and_save(
+                name=       name,
+                search_RL=  search_RL,
+                paspa=      paspa,
+                np_smooth=  np_smooth,
+                new_SR=     sr,
+                hpmser_FD=  hpmser_FD)
 
-                if verb > 0:
-                    print(f'R:{new_SR.id} {new_SR.score:6.3f} ', end='')
-                    if max_SR: print(f'[{paspa.dist(max_SR.point, new_SR.point):.2f}] {max_SR.id} (max: {max_SR.smooth_score:6.3f}/{max_SR.score:6.3f}) ', end='')
-                    print(f'{paspa.point_2str(new_SR.point)} {time.time() - res["s_time"]:.1f}s')
+            # gots new MAX
+            if search_RL[0].id != max_run_ID:
+                prev_max_run_ID = max_run_ID
+                max_run_ID = search_RL[0].id
 
-            if new_SRL:
-                search_RL = _update_and_save(
-                    name=       name,
-                    search_RL=  search_RL,
-                    paspa=      paspa,
-                    dst_smth=   dst_smth,
-                    new_SR=     new_SRL,
-                    hpmser_FD=  hpmser_FD)
+            if verb > 0:
+                # current sr report
+                max_SR = search_RL[0]
+                dif = sr.smooth_score - res['est_score']
+                difs = '+' if dif>0 else '-'
+                dif = abs(dif)
+                difs += f'{dif:.4f}'
+                srp = f'{sr.id} {sr.smooth_score:.4f} [{sr.score:.4f} {difs}] {max_SR.id}:{paspa.dist(max_SR.point, sr.point):.3f}'
+                srp += f'  avg_dst:{avg_dst:.3f} conf: {np_smooth} {prob_opt:.1f} {n_opt} {prob_top:.1f} {n_top} {int(time.time() - res["s_time"])}s'
+                print(srp)
 
-            max_SR = search_RL[0]
+                # new MAX report (last search is a new MAX)
+                if max_run_ID == cr_ID:
+                    msr = f'{paspa.point_2str(sr.point)}\n'
 
-            if n_loops and runIX >= n_loops:
+                    dp = 0
+                    if prev_max_run_ID is not None:
+                        for sa in search_RL:
+                            if sa.id == prev_max_run_ID:
+                                dp = paspa.dist(sa.point, sr.point)
+                                break
+
+                    msr += f' dst_prev:{dp:.3f}\n'
+                    for nps in NP_SMOOTH:
+                        ss_np, avd, all_sc = _smooth_score(search_RL[0].point, search_RL, paspa, nps)
+                        msr += f'  NPS:{nps} {ss_np:.4f} [{max(all_sc):.4f}-{min(all_sc):.4f}] {avd:.3f}\n'
+                    print(msr)
+
+                if top_show_freq and len(search_RL) % top_show_freq == 0:
+                    print(_nice_results_str(name, search_RL, paspa, n_top=5, all_nps=None))
+
+            if len(search_RL) == n_loops:
                 if verb>0: print(f'...n_loops ({n_loops}) done!')
                 break
+
+            cr_ID += 1
 
     except KeyboardInterrupt:
         if verb>0: print('...interrupted')
 
-    search_RL = _update_and_save(
+    search_RL, avg_dst = _update_and_save(
         name=       name,
         search_RL=  search_RL,
         paspa=      paspa,
-        dst_smth=   dst_smth,
+        np_smooth=  np_smooth,
         hpmser_FD=  hpmser_FD)
 
-    results = _nice_results_str(name, search_RL, paspa, dst=dst_smth)
+    results = _nice_results_str(name, search_RL, paspa)
     if hpmser_FD:
         with open( f'{hpmser_FD}/{name}/{name}_results.txt', 'w') as file: file.write(results)
 
@@ -466,45 +563,7 @@ def hpmser(
 
     return search_RL
 
-
-def example_hpmser_smpl(
-        n_samples,
-        hpmser_FD,
-        dst_smth,
-        prob_max,
-        prob_top,
-        n_top):
-
-    name, search_RL, paspa = show_hpmser_resuls(hpmser_FD, dst_smth=dst_smth)
-
-    num_0 = 0
-    sum_n = 0
-    avg_dist = 0
-    avg_sc = 0
-    for ix in range(n_samples):
-        spoint = _get_opt_sample(
-            paspa=          paspa,
-            search_RL=      search_RL,
-            dst_smpl=       dst_smth,
-            prob_max=       prob_max,
-            prob_top=       prob_top,
-            n_top=          n_top)
-
-        n_close = _num_of_close(spoint, search_RL, paspa, dst_smth)
-        dist = paspa.dist(search_RL[0].point, spoint)
-        smooth_score = _smooth_score(spoint, search_RL, paspa, dst_smth)
-
-        if n_close == 0: num_0 += 1
-        sum_n += n_close
-        avg_dist += dist
-        avg_sc += smooth_score
-
-        print(f'{ix} point got {n_close} n_close, {dist:4.2f} {smooth_score:8.5f}')
-
-    print(f'sampling stats:')
-    print(f'n0:{num_0}, nALL:{sum_n}, avg_dist:{avg_dist/n_samples:.3f}, avg_sc:{avg_sc/n_samples}')
-
-
+# hpmser example
 def example_hpmser(
         n_proc=     10,
         av_time=    1, # avg num seconds function calculates
@@ -537,9 +596,6 @@ def example_hpmser(
     hpmser(
         func=       some_func,
         psd=        psd,
-        rad=        0.2,
-        ax_rrad=    0.2,
-        space_prob= 0.5,
         def_kwargs= {'name':'pio', 'a':3, 'wait':av_time*2, 'verb':verb-1},
         devices=    [None]*n_proc,
         #subprocess= False,
@@ -549,11 +605,4 @@ def example_hpmser(
 
 if __name__ == '__main__':
 
-    #example_hpmser()
-    example_hpmser_smpl(
-        n_samples=      1000,
-        hpmser_FD=      '_hpmser',
-        dst_smth=       0.01,
-        prob_max=       0.1,
-        prob_top=       0.5,
-        n_top=          10)
+    example_hpmser()

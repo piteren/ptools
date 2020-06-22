@@ -15,7 +15,7 @@ class Logger:
             self,
             fileName):
         self.terminal = sys.stdout
-        self.log = open(fileName, 'a')
+        self.log = open(fileName, 'a', encoding='utf-8')
 
     def write(self, message):
         self.terminal.write(message)
@@ -32,8 +32,8 @@ def set_logger(
 
     if not os.path.isdir(logFD): os.mkdir(logFD)
 
-    cDate = time.strftime("%Y%m%d.%H%M%S")
     fileName = custom_name if custom_name else 'run'
+    cDate = time.strftime("%Y%m%d.%H%M%S")
     fileName += '_' + cDate + '.log'
 
     sys.stdout = Logger(logFD + '/' +  fileName)
