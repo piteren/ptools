@@ -42,7 +42,6 @@
 """
 
 import math
-import time
 import random
 
 
@@ -52,13 +51,11 @@ class PaSpa:
     def __init__(
             self,
             psd :dict,                  # params space dictionary (lists & tuples)
-            seed :int or None=  12321,  # seed for random sampling
             verb=               0):
 
         self.psd = psd
         self.dim = len(self.psd)
-        self.seed_counter = seed if seed is not None else time.time()
-        if verb > 0:  print(f'\n*** PaSpa *** (dim: {self.dim}) inits with seed {self.seed_counter} ...')
+        if verb > 0:  print(f'\n*** PaSpa *** (dim: {self.dim}) inits')
 
         # some safety check and resolve Type and Width
         self.psd_T = {} # axis space type
@@ -139,27 +136,24 @@ class PaSpa:
         if axis not in self.psd_T:                                  return False # axis not in a space
         if 'list' in self.psd_T[axis]:
             if type(value) is float and 'int' in self.psd_T[axis]:  return False # type mismatch
-            if not self.psd[axis][0] <= value <= self.psd[axis][1]: return False # value not in a range
+            if self.psd[axis][0] <= value <= self.psd[axis][1]:     return True
+            else:                                                   return False # value not in a range
         elif value not in self.psd[axis]:                           return False # value not in a tuple
         return True
 
     # checks if point belongs to a space
     def __is_in_space(self, p: dict):
         for a in p:
-            if not self.__is_in_axis(a,p[a]): return False
+            if not self.__is_in_axis(a,p[a]):
+                return False
         return True
 
-    # get (single) parameter (random) value
-    # ...algorithm is a bit complicated, but ensures same probability(0.5) for both sides of ref_val (!edges of space)
+    # gets (single) parameter (random) value ...algorithm is a bit complicated, but ensures same probability(0.5) for both sides of ref_val (!edges of space)
     def __get_pval(
             self,
             axis: str,
             ref_val=    None,   # if given >> new value will be sampled from +-ax_dst around ref_val
             ax_dst=     None):
-
-        # increase counter
-        random.seed(self.seed_counter)
-        self.seed_counter += 1
 
         if 'list' in self.psd_T[axis]:
             # min_val, rng, add, fval are floats, ...so int_list will have to
@@ -173,8 +167,8 @@ class PaSpa:
             # only when ref_val:
             while not self.__is_in_axis(axis,val):
                 fval = (fval+ref_val)/2 # get closer by half to ref_val
-                if 'int' in self.psd_T[axis]:   val = int(round(fval))                                  # round to int
-                else:                           val = fval                                              # just float
+                if 'int' in self.psd_T[axis]:   val = int(round(fval))                              # round to int
+                else:                           val = fval                                          # just float
 
         else:
             if ref_val is not None:
@@ -236,7 +230,7 @@ class PaSpa:
     # samples point in space
     def sample_point(
             self,
-            ref_point :dict=    None,           # if reference point is given point will be sampled in given radius(rad)
+            ref_point :dict=    None,           # if reference point is given point will be sampled with ax_dst
             ax_dst=             None) -> dict:  # relative distance on axis (both sides), where to sample
 
         if ref_point is None: ref_point = {key: None for key in self.psd.keys()}
@@ -266,7 +260,9 @@ class PaSpa:
         s = '{'
         for key in sorted(list(p.keys())):
             s += f'{key}:'
-            vs = str(p[key])
+            val = p[key]
+            vs = str(val)
+            if type(val) is float: vs = f'{val:f}'
             if len(vs) > self.str_W[key]: vs = vs[:self.str_W[key]]
             s += f'{vs:{self.str_W[key]}s} '
         s = s[:-1] + '}'
@@ -320,6 +316,7 @@ def example_paspa(dc):
 
 if __name__ == '__main__':
 
+    """
     rgs = {
         'a':    (True, False, None),
         'b':    (-1, -7, 10, 15.5, 90, 30),
@@ -332,5 +329,42 @@ if __name__ == '__main__':
     }
 
     example_paspa(rgs)
+    """
 
+    psd = {
+        'pe_width':             [0,5],
+        'pe_min_pi':            [0.05,1],
+        'pe_max_pi':            [1.0,9.9],
+        't_drop':               [0.0,0.1],                  #
+        'f_drop':               [0.0,0.2],                  #
+        'n_layers':             [15,25],                    #
+        'lay_drop':             [0.0,0.2],                  #
+        'ldrt_scale':           [2,6],                      #
+        'ldrt_drop':            [0.0,0.5],                  #
+        'drt_nlays':            [0,5],                      #
+        'drt_scale':            [2,6],                      #
+        'drt_drop':             [0.0,0.6],                  #
+        'out_drop':             [0.0,0.5],                  #
+        'learning_rate':        (1e-4,1e-3,5e-3),           #
+        'weight_f':             [0.1,9.9],                  #
+        'scale_f':              [1.0,6],                    #
+        'warm_up':              (100,200,500,1000,2000),    #
+        'ann_step':             (1,2,3),                    #
+        'n_wup_off':            [1,50]}                     #
+
+    paspa = PaSpa(psd)
+    print(paspa)
+
+
+
+    ref_pt = paspa.sample_point()
+    ld = 0
+    nref_pt  =ref_pt
+    while ld < 1:
+        nref_pt = paspa.sample_point(ref_point=ref_pt,ax_dst=0.1)
+        if nref_pt['ldrt_drop'] > 1: print('dupex')
+        if nref_pt['ldrt_drop'] < ref_pt['ldrt_drop']:
+            ref_pt = nref_pt
+            print(ref_pt['ldrt_drop'])
+    print(ref_pt)
 

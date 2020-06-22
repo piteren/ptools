@@ -67,6 +67,9 @@ class NEModel(dict):
             self,
             fwd_func,                               # function building forward graph (from PH to loss)
             mdict :dict,                            # model parameters-arguments dictionary
+            # TODO: I'm not sure whether session can be given here, since we create tf.Graph for model below (graph should be given to session...)
+            # I will lock this feature...
+            # session :tf.Session=        None,       # session to use
             devices=                    -1,         # check neuralmess.dev_manager.ft_devices for details
             do_opt :bool=               True,       # add optimization part to the graph (for training)
                 # values below complement mdict
@@ -341,6 +344,9 @@ class NEModel(dict):
                             print(' ### opt_vars: %d floats: %s (%s)' % (len(saver_vars['opt_vars']), short_scin(num_var_floats(saver_vars['opt_vars'])), saver_vars['opt_vars'][0].device))
                             if self.verb > 1: log_vars(saver_vars['opt_vars'])
 
+        # TODO: since disabled passing session to init... (check line 71)
+        # self.session = session
+        # if not self.session: # create
         config = tf.ConfigProto(allow_soft_placement=True)
         config.gpu_options.allow_growth = True
         self.session = tf.Session(

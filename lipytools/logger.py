@@ -32,8 +32,8 @@ def set_logger(
 
     if not os.path.isdir(logFD): os.mkdir(logFD)
 
-    cDate = time.strftime("%Y%m%d.%H%M%S")
     fileName = custom_name if custom_name else 'run'
+    cDate = time.strftime("%Y%m%d.%H%M%S")
     fileName += '_' + cDate + '.log'
 
     sys.stdout = Logger(logFD + '/' +  fileName)

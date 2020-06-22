@@ -4,15 +4,14 @@
 
     some encoders
 
-    * all encoders do IN & OUT LayerNorm
-    * lay_DRT does OUT LN
-
 """
 
 import tensorflow as tf
 
 from ptools.neuralmess.base_elements import my_initializer, list_of_layers
 from ptools.neuralmess.layers import lay_res, zeroes, lay_dense, lay_conv1D, attn
+
+# TODO: probably in tf 1.15.2 histogram 'family=' should be replaced with 'description=' << check it on histogram case
 
 
 # single DRT layer, base of enc_DRT (based on some Transformer concepts)
@@ -185,8 +184,10 @@ def enc_CNN(
     if initializer is None: initializer = my_initializer(seed)
 
     # manage history
-    history_lays = None if history is None else tf.unstack(history, axis=-3)
-    if verb>1 and history_lays: print(f' > state_lays len {len(history_lays)} of: {history_lays[0]}')
+    history_lays = None
+    if history is not None:
+        history_lays = tf.unstack(history, axis=-3)
+        if verb>1: print(f' > state_lays len {len(history_lays)} of: {history_lays[0]}')
 
     hist_summ = []
     hist_layers = list_of_layers(n_layers, n_select=n_hist)
@@ -241,7 +242,7 @@ def enc_CNN(
                     filters=        n_filters,
                     activation=     None,
                     initializer=    initializer,
-                    padding=        'valid' if history_lays else 'same',
+                    padding=        'same' if history is None else 'valid',
                     seed=           seed,
                     verb=           0)
                 if hist_lay: hist_summ.append(tf.summary.histogram('c_cnn', output, family=name))
@@ -383,7 +384,7 @@ def enc_TNS(
         hist_summ = []
 
         output = in_seq
-        task_query_norm = None
+        taskQueryNorm = None
         if task_query is None:
             hist_summ.append(tf.summary.histogram('a_inputSeq', output, family=name))
             # layer norm 1 on seq
@@ -395,10 +396,10 @@ def enc_TNS(
                 hist_summ.append(tf.summary.histogram('b_inputSeqLN', output, family=name))
         else:
             hist_summ.append(tf.summary.histogram('a_inTaskQuery', task_query, family=name))
-            task_query_norm = task_query
+            taskQueryNorm = task_query
             # layer norm 1 on taskQuery
             if do_LN:
-                task_query_norm = tf.contrib.layers.layer_norm(
+                taskQueryNorm = tf.contrib.layers.layer_norm(
                     inputs=             task_query,
                     begin_norm_axis=    -1,
                     begin_params_axis=  -1)
@@ -407,7 +408,7 @@ def enc_TNS(
         # multi head self attention
         mha_out = mh_attn(
             in_seq=         output,
-            query=          task_query_norm,
+            query=          taskQueryNorm,
             dropout_att=    dropout_att,
             drop_flag=      drop_flag,
             seed=           seed)

@@ -238,10 +238,8 @@ def mrg_ckpts(
 
     var_namesA = sorted([v[0] for v in tf.contrib.framework.list_variables(ckptA_FD+ckptA)])
     if verb>0: print('variables from ckptA (%4d):'%len(var_namesA), var_namesA)
-    var_namesB = []
-    if ckptB:
-        var_namesB = sorted([v[0] for v in tf.contrib.framework.list_variables(ckptB_FD+ckptB)]) if ckptB else []
-        if verb>0: print('variables from ckptB (%4d):'%len(var_namesB), var_namesB)
+    var_namesB = sorted([v[0] for v in tf.contrib.framework.list_variables(ckptB_FD+ckptB)]) if ckptB else []
+    if verb>0: print('variables from ckptB (%4d):'%len(var_namesB), var_namesB)
 
     oscope_len = 0
     if replace_scope:
