@@ -406,9 +406,7 @@ def hpmser(
     if len(results_FDL):
         print(f'\nThere are {len(results_FDL)} searches in hpmser_FD, do you want to continue with the last one ({results_FDL[-1]}) ..waiting 10 sec (y/n, n-default)?')
         i, o, e = select.select([sys.stdin], [], [], 10)
-        if not i: i = 'n'
-        else: i = sys.stdin.readline().strip()
-        if i == 'y':
+        if i and sys.stdin.readline().strip() == 'y':
             name = results_FDL[-1]  # take last
             try:    search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl')
             except: search_RL, paspa = r_pickle(f'{hpmser_FD}/{name}/{name}_results.srl.backup')
