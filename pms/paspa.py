@@ -92,12 +92,12 @@ class PaSpa:
                 if 'float' in self.psd_T[axis]: axd.append(10)
                 else:
                     wd = self.psd_W[axis]
-                    if wd >= 1000: axd.append(10)
-                    else: axd.append(math.log10(wd))
+                    sq = math.sqrt(wd)
+                    axd.append(sq if sq<10 else 10)
             else:
                 wd = len(self.psd[axis])
-                if wd >= 1000: axd.append(10)
-                else: axd.append(math.log10(wd))
+                sq = math.sqrt(wd)
+                axd.append(sq if sq<10 else 10)
         mul = 1
         for e in axd: mul *= e
         self.rdim = math.log10(mul)
