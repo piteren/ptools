@@ -24,8 +24,7 @@
                     rdim = log10(∏ axd) (for all axes)
                         axd for axis:
                         = 10                        :list of floats
-                        = 10                        :tuple or list of ints when len(ax_elements) >=1000)
-                        = 1+log10(len(ax elements)) :tuple or list of ints when len(ax elements) < 1000
+                        = sq if sq<10 else 10       :tuple or list, where sq = sqrt(len(ax_elements))
 
         PaSpa is build from psd (dict):
             psd - {axis(parameter name): list or tuple}
