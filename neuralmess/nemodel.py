@@ -125,12 +125,12 @@ class NEModel(dict):
         if self.verb > 0: print(' > NEModel name: %s'%resolved_name)
 
         # model folder and logger
-        self.model_FD = save_TFD + '/' + resolved_name
+        self.model_FD = f'{save_TFD}/{resolved_name}'
         if not os.path.isdir(self.model_FD): os.mkdir(self.model_FD)
         if do_log: set_logger(logFD=self.model_FD, custom_name=resolved_name, verb=self.verb)
 
         # read mdict file from folder (last saved model parameters)
-        self.md_file = self.model_FD + '/mdict.dct'
+        self.md_file = f'{self.model_FD}/mdict.dct'
         file_mdict = r_pickle(self.md_file)
         if not file_mdict: file_mdict = {}
         elif self.verb > 0: print(' > loaded model dict from file: %s' % self.md_file)
