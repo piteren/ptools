@@ -10,6 +10,7 @@ import inspect
 import os
 import pickle
 import random
+import shutil
 import string
 import time
 
@@ -96,6 +97,17 @@ def print_nested_dict(dc, ind=0):
     else:
         if type(dc) is list:    prnIND(ind, '%s...(len %d)'%(dc[0], len(dc)))
         else:                   prnIND(ind, '%s'%dc)
+
+# prepares folder, creates or flushes
+def prep_folder(
+        folder_path :str,
+        flush_non_empty=    False):
+
+    if not os.path.isdir(folder_path): os.mkdir(folder_path)
+    elif flush_non_empty:
+        shutil.rmtree(folder_path)
+        prep_folder(folder_path)
+
 
 
 if __name__ == '__main__':
