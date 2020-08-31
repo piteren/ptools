@@ -8,8 +8,11 @@
 
 import copy
 import itertools
+import os
+import shutil
 
 from ptools.textool.text_metrics import lev_dist
+from ptools.lipytools.little_methods import w_pickle, r_pickle
 
 
 # params dictionary
@@ -17,11 +20,14 @@ class ParaDict(dict):
 
     def __init__(
             self,
-            dct :dict,
+            name: str,
+            dct: dict=          None,
             verb=               0):
 
-        super(ParaDict, self).__init__()
+        super().__init__()
+        self.name = name
         self.verb = verb
+        if not dct: dct = {}
 
         self.update(dct)
 
@@ -108,8 +114,21 @@ class ParaDict(dict):
     def __str__(self):
         return self.dict_2str(self)
 
-    # writes self(dict) to txt file
-    def write_txtfile(self, file_name):
-        file = open(file_name, 'w')
-        file.write(str(self))
-        file.close()
+    # saves .dct & .txt to folder
+    def save(
+            self,
+            folder: str,
+            save_txt=   True,
+            save_OLD=   True):
+
+        w_pickle(self, f'{folder}/{self.name}.dct')
+        if save_txt:
+            md_file_txt = f'{folder}/{self.name}.txt'
+            if save_OLD and os.path.isfile(md_file_txt):
+                shutil.copy(md_file_txt,md_file_txt+'_OLD')
+            with open(md_file_txt, 'w') as file: file.write(str(self))
+
+    # returns ParaDict object from .dct file
+    @staticmethod
+    def build(file: str):
+        return r_pickle(file)

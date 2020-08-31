@@ -12,7 +12,7 @@ import time
 from typing import Callable
 from queue import Empty
 
-from ptools.mpython.mpdecor import qproc
+from ptools.mpython.mpdecor import proc_que
 from ptools.lipytools.little_methods import short_scin
 
 
@@ -46,7 +46,7 @@ class InternalProcessor(Process):
     # wraps func
     def __proc_task(self, task, taskIX, device):
 
-        @qproc(self.inq)
+        @proc_que(self.inq)
         def wrap(task, taskIX, device):
             if self.device_for_func: task[self.device_for_func] = device
             res = self.func(**task)

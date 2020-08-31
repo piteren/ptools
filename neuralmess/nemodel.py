@@ -38,11 +38,10 @@
 
 import numpy as np
 import os
-import shutil
 import tensorflow as tf
 
 from ptools.lipytools.logger import set_logger
-from ptools.lipytools.little_methods import get_defaults, short_scin, r_pickle, w_pickle, stamp
+from ptools.lipytools.little_methods import get_defaults, short_scin, stamp
 from ptools.pms.paradict import ParaDict
 from ptools.neuralmess.base_elements import num_var_floats, lr_scaler, gc_loss_reductor, log_vars
 from ptools.neuralmess.dev_manager import tf_devices
@@ -119,7 +118,7 @@ class NEModel(dict):
         if 'name' in fwdf_mdict:    resolved_name =     fwdf_mdict['name']
         if 'name' in mdict:         resolved_name =     mdict['name']
         if name_timestamp:          resolved_name +=    '.' + stamp()
-        if self.verb > 0: print(' > NEModel name: %s'%resolved_name)
+        if self.verb > 0: print(f' > NEModel name: {resolved_name}')
 
         # model folder and logger
         self.model_FD = f'{save_TFD}/{resolved_name}'
@@ -127,13 +126,13 @@ class NEModel(dict):
         if do_log: set_logger(logFD=self.model_FD, custom_name=resolved_name, verb=self.verb)
 
         # read mdict file from folder (last saved model parameters)
-        self.md_file = f'{self.model_FD}/mdict.dct'
-        file_mdict = r_pickle(self.md_file)
-        if not file_mdict: file_mdict = {}
-        elif self.verb > 0: print(' > loaded model dict from file: %s' % self.md_file)
+        mdict_file = f'{self.model_FD}/mdict.dct'
+        pd_ffile = ParaDict.build(mdict_file)
+        if not pd_ffile: pd_ffile = {}
+        elif self.verb > 0: print(f' > loaded model dict from file: {mdict_file}')
 
-        self.mdict = ParaDict(fwdf_mdict)   # ParaDict with defaults of fwd_func
-        self.mdict.update(file_mdict)       # update(override) with file dict
+        self.mdict = ParaDict(name='mdict', dct=fwdf_mdict) # ParaDict with defaults of fwd_func
+        self.mdict.update(pd_ffile)         # update(override) with ParaDict from file
         self.mdict.add_new(self_args_dict)  # add new from self_args_dict (extends)
         self.mdict.update(mdict)            # update with mdict
         self.mdict['name'] = resolved_name  # finally override name
@@ -142,14 +141,10 @@ class NEModel(dict):
         self.mdict.check_params_sim(SPEC_KEYS)  # safety check
         self.update(self.mdict)  # finally update self with all model building params
 
-        # save dict files (in train mode)
+        # save ParaDict (in train mode)
         if do_opt:
-            w_pickle(self.mdict, self.md_file)  # write dict of params
-            md_file_txt = self.md_file[:-3]+'txt'
-            if os.path.isfile(md_file_txt):
-                shutil.copy(md_file_txt,md_file_txt+'_OLD')
-            self.mdict.write_txtfile(md_file_txt)  # write dict to txt
-            if self.verb > 0: print(' > params dictionary of %s NEModel saved to .dct and .txt files'%self.mdict['name'])
+            self.mdict.save(self.model_FD)
+            if self.verb > 0: print(' > ParaDict of %s NEModel saved')
 
         devices = tf_devices(devices, verb=self.verb)
 
@@ -166,7 +161,6 @@ class NEModel(dict):
         # build FWD graph(s) >> manage variables >> build OPT graph
         self.gFWD = [] # list of dicts of all FWD graphs (from all devices)
         self.graph = tf.Graph()
-        #print(self.mdict['name'], self.graph)
         with self.graph.as_default():
 
             tf.set_random_seed(self['seed']) # set graph seed

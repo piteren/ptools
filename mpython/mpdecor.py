@@ -2,7 +2,22 @@
 
  2020 (c) piteren
 
-    multiprocessing decorators
+    multiprocessing decorators >> run decorated functions in subprocess
+
+    @proc
+        - does not hold till finish
+        - does not return any value
+
+    @proc_wait
+        - holds main process till join
+
+    @proc_return
+        - holds main process till join
+        - returns function result (using que)
+
+    @proc_que(que)
+        - does not hold till finish
+        - will put function result on given que
 
 """
 
@@ -11,16 +26,15 @@ from functools import partial
 import time
 
 
-# subprocess decorator, runs decorated function in subprocess
 def proc(f):
 
     def new_f(*args, **kwargs):
         Process(target=partial(f, *args, **kwargs)).start()
 
-    new_f.__name__ = f'{f.__name__}:@proc'
+    new_f.__name__ = f'@proc:{f.__name__}'
     return new_f
 
-# subprocess decorator, runs decorated function in subprocess, but holds main process till join
+
 def proc_wait(f):
 
     def new_f(*args, **kwargs):
@@ -28,10 +42,10 @@ def proc_wait(f):
         p.start()
         p.join()
 
-    new_f.__name__ = f'{f.__name__}:@proc_wait'
+    new_f.__name__ = f'@proc_wait:{f.__name__}'
     return new_f
 
-# helper class (process with que) for qproc
+# helper class (process with que - puts target result on que)
 class MProc(Process):
 
     def __init__(
@@ -51,15 +65,26 @@ class MProc(Process):
         res = self.f(*self.ag, **self.kw)
         self.que.put(res)
 
-# subproces decorator, runs decorated function in subprocess, result will be put on que
-def qproc(que):
+
+def proc_return(f):
+    def new_f(*args, **kwargs):
+        que = Queue()
+        p = MProc(que=que, f=f, args=args, kwargs=kwargs)
+        p.start()
+        ret = que.get()
+        return ret
+    new_f.__name__ = f'@proc_return:{f.__name__}'
+    return new_f
+
+
+def proc_que(que):
     def wrap(f):
 
         def new_f(*args, **kwargs):
             p = MProc(que=que, f=f, args=args, kwargs=kwargs)
             p.start()
 
-        new_f.__name__ = f'{f.__name__}:@qproc'
+        new_f.__name__ = f'@qproc:{f.__name__}'
         return new_f
 
     return wrap
@@ -75,9 +100,19 @@ def example_proc():
             print(i, 'done')
             time.sleep(0.1)
 
+    print(task.__name__)
     task(to=10)
     task(10)
     task(10)
+
+    @proc
+    def calc(n):
+        val = 2 * n
+        print(f'will return {val}')
+        return val
+
+    print(f'returned {calc(3)}')
+    print(f'returned {calc(4)}')
 
 
 def example_proc_wait():
@@ -93,12 +128,23 @@ def example_proc_wait():
     task(10)
 
 
-def example_qproc():
+def example_proc_return():
+    @proc_return
+    def calc(n):
+        val = 2 * n
+        print(f'will return {val}')
+        return val
+
+    print(f'returned {calc(3)}')
+    print(f'returned {calc(4)}')
+
+
+def example_proc_que():
 
     import random
 
     que = Queue()
-    @qproc(que)
+    @proc_que(que)
     def task(name='def', to=5):
         sum = 0
         for i in range(to):
@@ -116,6 +162,7 @@ def example_qproc():
 
 if __name__ == '__main__':
 
-    #example_proc()
+    example_proc()
     #example_proc_wait()
-    example_qproc()
+    #example_proc_return()
+    #example_proc_que()

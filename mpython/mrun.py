@@ -14,7 +14,7 @@ import time
 from typing import Callable, List
 
 from ptools.lipytools.decorators import timing
-from ptools.mpython.mpdecor import qproc
+from ptools.mpython.mpdecor import proc_que
 
 
 # multi-running function
@@ -62,7 +62,7 @@ def mrun(
         que.put(result)
 
     # func wrap with interface and MP
-    @qproc(que)
+    @proc_que(que)
     def interface_wrap_MP(**kwargs):
         return inner_func(**kwargs)
 

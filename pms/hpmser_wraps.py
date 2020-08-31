@@ -9,7 +9,7 @@
 from inspect import getfullargspec
 from multiprocessing import Queue
 
-from ptools.mpython.mpdecor import qproc
+from ptools.mpython.mpdecor import proc_que
 
 # func wrap with interface
 def inner_func_H(
@@ -45,6 +45,6 @@ def interface_wrap_H(**kwargs):
     wrap_que.put(result)
 
 # func wrap with interface and MP
-@qproc(wrap_que)
+@proc_que(wrap_que)
 def interface_wrap_MP_H(**kwargs):
     return inner_func_H(**kwargs)

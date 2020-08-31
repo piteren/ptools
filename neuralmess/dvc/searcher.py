@@ -214,7 +214,7 @@ class DVCSearcher:
 
         self.mdict = dvc_dict
         if type(self.mdict) is not ParaDict:
-            self.mdict = ParaDict(dvc_presets['dvc_base'], verb=self.verb-1)
+            self.mdict = ParaDict(name='mdict', dct=dvc_presets['dvc_base'], verb=self.verb-1)
             dvc_dict['verb'] = 0  # override model verb
             self.mdict.refresh(dvc_dict)
 
