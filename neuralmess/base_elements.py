@@ -191,15 +191,14 @@ def log_vars(
         simple=     False,
         sort=       True): # use order from list or sorted by name
 
-    print('Total num of variables: %d'%len(variables))
-    print(' > num of floats: %s' % short_scin(num_var_floats(variables), precise=True))
+    print(f'Total num of variables: {len(variables)}')
+    print(f' > num of floats: {short_scin(num_var_floats(variables), precise=True)}')
     if not simple:
         vns = [(v.name, v.shape) for v in variables]
         if sort:
             dVar = {v.name: v.shape for v in variables}
             vns = [(key, dVar[key]) for key in sorted(list(dVar.keys()))]
-        for v in vns:
-            print(' >> v:', v[0], v[1])
+        for v in vns: print(f' >> v: {v[0]} {v[1]}')
 
 # logs variables from checkpoint
 def log_checkpoint(ckpt_FD):
@@ -207,7 +206,7 @@ def log_checkpoint(ckpt_FD):
     tot_siz = 0
     for _, shape in ckpt_vars:
         tot_siz += sh_size(shape)
-    print('\nGot %d variables in original checkpoint (total size %d nums)'%(len(ckpt_vars),tot_siz))
+    print(f'\nGot {len(ckpt_vars)} variables in original checkpoint (total size {tot_siz} nums)')
 
     max_nm_len = 0
     max_sh_len = 0
@@ -220,7 +219,6 @@ def log_checkpoint(ckpt_FD):
     for var_name, shape in ckpt_vars:
         var = tf.contrib.framework.load_variable(ckpt_FD, var_name)
         print(f' > ({100*sh_size(shape)/tot_siz:4.1f}%) {var_name:{max_nm_len}s} {str(shape):{max_sh_len}s} {var.dtype}')
-        #print(' > (%4.1f%%) %-50s %25s %s'%(100*sh_size(shape)/tot_siz, var_name, shape, var.dtype))
 
 # weighted merge of two checkpoints
 def mrg_ckpts(
@@ -235,11 +233,14 @@ def mrg_ckpts(
         replace_scope :str= None,   # replaces outer scope with given string
         verb=               0):
 
+    if ckptA_FD[-1] != '/': ckptA_FD += '/'
+    if ckptB_FD and ckptB_FD[-1] != '/': ckptB_FD += '/'
+    if ckptM_FD[-1] != '/': ckptM_FD += '/'
 
     var_namesA = sorted([v[0] for v in tf.contrib.framework.list_variables(ckptA_FD+ckptA)])
-    if verb>0: print('variables from ckptA (%4d):'%len(var_namesA), var_namesA)
+    if verb>0: print(f'variables from ckptA ({len(var_namesA):4d}): {var_namesA}')
     var_namesB = sorted([v[0] for v in tf.contrib.framework.list_variables(ckptB_FD+ckptB)]) if ckptB else []
-    if verb>0: print('variables from ckptB (%4d):'%len(var_namesB), var_namesB)
+    if verb>0: print(f'variables from ckptB ({len(var_namesB):4d}): {var_namesB}')
 
     oscope_len = 0
     if replace_scope:
@@ -247,28 +248,27 @@ def mrg_ckpts(
             if c == '/': break
             oscope_len += 1
     if verb>0:
-        print('oscope_len',oscope_len)
-        if oscope_len: print(' > will replace %s with %s'%(var_namesA[0][:oscope_len],replace_scope))
+        print(f'oscope_len {oscope_len}')
+        if oscope_len: print(f' > will replace {var_namesA[0][:oscope_len]} with {replace_scope}')
 
     avL = []
     with tf.variable_scope('av'):
         for var_name in var_namesA:
-            var = tf.contrib.framework.load_variable(ckptA_FD+ckptA, var_name)
+            var = tf.contrib.framework.load_variable(f'{ckptA_FD}{ckptA}', var_name)
             avL.append(tf.Variable(var, name=var_name))
 
     bvL = []
     if ckptB:
         with tf.variable_scope('bv'):
             for var_name in var_namesB:
-                var = tf.contrib.framework.load_variable(ckptB_FD+ckptB, var_name)
+                var = tf.contrib.framework.load_variable(f'{ckptB_FD}{ckptB}', var_name)
                 bvL.append(tf.Variable(var, name=var_name))
 
     fin_vars = []
     for ix in range(len(var_namesA)):
         var_name = var_namesA[ix]
-        if verb>0: print('old var_name', var_name)
+        if verb>0: print(f'old var_name: {var_name}')
         if replace_scope: var_name = replace_scope + var_name[oscope_len:]
-        #if verb>0: print('new var_name', var_name)
 
         varA = avL[ix]
         if bvL and varA.dtype == 'float32':
@@ -288,7 +288,7 @@ def mrg_ckpts(
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
-        fin_saver.save(sess, ckptM_FD+'%s/%s'%(ckptM,ckptM), write_meta_graph=False)
+        fin_saver.save(sess, f'{ckptM_FD}{ckptM}/{ckptM}', write_meta_graph=False)
     tf.reset_default_graph()
     if verb>0: print('done!')
 
@@ -326,7 +326,7 @@ class ZeroesProcessor:
 
         if self.summ_writer and step:
             for k in rd:
-                nane_summ = tf.Summary(value=[tf.Summary.Value(tag=self.tag_pfx+'/nane_%d'%k, simple_value=rd[k])])
+                nane_summ = tf.Summary(value=[tf.Summary.Value(tag=f'{self.tag_pfx}/nane_{k}', simple_value=rd[k])])
                 self.summ_writer.add_summary(nane_summ, step)
 
         return rd
