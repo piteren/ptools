@@ -15,7 +15,7 @@
 
     Model building params and their arguments (p&a) may come from (in order of overriding):
         - NEModel __init__ p&a
-        - mdict.dct p&a (when saved in model folder)
+        - mdict.dct p&a (when saved in model folder)
         - fwd_func p&a (defaults)
         - mdict (for fwd_func, given to NEModel init)
 
@@ -39,11 +39,10 @@
 import numpy as np
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-import shutil
 import tensorflow as tf
 
 from ptools.lipytools.logger import set_logger
-from ptools.lipytools.little_methods import get_defaults, short_scin, r_pickle, w_pickle, stamp
+from ptools.lipytools.little_methods import get_defaults, short_scin, stamp
 from ptools.pms.paradict import ParaDict
 from ptools.neuralmess.base_elements import num_var_floats, lr_scaler, gc_loss_reductor, log_vars
 from ptools.neuralmess.dev_manager import tf_devices
