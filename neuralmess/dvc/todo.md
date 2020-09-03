@@ -1,0 +1,7 @@
+- policies of selecting batch
+    - linear select (from shuffled while building the corp)
+    - random sampling every time
+    - random sampling with coverage
+- move digitalization with FT, USE, BPE to other module
+- export to tflite/pb with options (quantize)
+- base preset for VEC

@@ -38,10 +38,12 @@
 
 import numpy as np
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import shutil
 import tensorflow as tf
 
 from ptools.lipytools.logger import set_logger
-from ptools.lipytools.little_methods import get_defaults, short_scin, stamp
+from ptools.lipytools.little_methods import get_defaults, short_scin, r_pickle, w_pickle, stamp
 from ptools.pms.paradict import ParaDict
 from ptools.neuralmess.base_elements import num_var_floats, lr_scaler, gc_loss_reductor, log_vars
 from ptools.neuralmess.dev_manager import tf_devices
@@ -121,15 +123,19 @@ class NEModel(dict):
         if self.verb > 0: print(f' > NEModel name: {resolved_name}')
 
         # model folder and logger
-        self.model_FD = f'{save_TFD}/{resolved_name}'
-        if not os.path.isdir(self.model_FD): os.mkdir(self.model_FD)
-        if do_log: set_logger(logFD=self.model_FD, custom_name=resolved_name, verb=self.verb)
+        if save_TFD and not os.path.isdir(save_TFD): os.mkdir(save_TFD)
+        self.model_FD = f'{save_TFD}/{resolved_name}' if save_TFD else None
+        if self.model_FD:
+            if not os.path.isdir(self.model_FD): os.mkdir(self.model_FD)
+            if do_log: set_logger(logFD=self.model_FD, custom_name=resolved_name, verb=self.verb)
 
         # read mdict file from folder (last saved model parameters)
-        mdict_file = f'{self.model_FD}/mdict.dct'
-        pd_ffile = ParaDict.build(mdict_file)
-        if not pd_ffile: pd_ffile = {}
-        elif self.verb > 0: print(f' > loaded model dict from file: {mdict_file}')
+        mdict_file = f'{self.model_FD}/mdict.dct' if self.model_FD else None
+        pd_ffile = {}
+        if mdict_file:
+            pd_ffile = ParaDict.build(mdict_file)
+            if not pd_ffile: pd_ffile = {}
+            elif self.verb>0: print(f' > loaded model dict from file: {mdict_file}')
 
         self.mdict = ParaDict(name='mdict', dct=fwdf_mdict) # ParaDict with defaults of fwd_func
         self.mdict.update(pd_ffile)         # update(override) with ParaDict from file
@@ -165,7 +171,7 @@ class NEModel(dict):
 
             tf.set_random_seed(self['seed']) # set graph seed
             np.random.seed(self['seed'])
-            if self.verb > 0: print('\nNEModel set TF & NP seed to %d' % self['seed'])
+            if self.verb > 0: print(f'\nNEModel set TF seed to {self["seed"]}')
 
             # builds graph @SEP, this graph wont be run, it is only needed to place variables, if not vars_sep >> variables will be placed with first tower
             if sep_device:
@@ -361,7 +367,7 @@ class NEModel(dict):
         self.summ_writer = tf.summary.FileWriter(
             logdir=         self.model_FD,
             #graph=          self.graph, # you can call add_graph() later
-            flush_secs=     10)
+            flush_secs=     10) if self.model_FD else None
 
         if self.verb > 0: print('%s (NEModel) build finished!'%self['name'])
         if self.verb > 2: print(self)

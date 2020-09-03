@@ -102,28 +102,10 @@ class PaSpa:
         self.rdim = math.log10(mul)
         if verb > 0:  print(f' > PaSpa rdim: {self.rdim:.1f}')
 
-        self.str_W = {} # formatting width for axes
+        self.str_W = {axis: max([len(str(e)) for e in self.psd[axis]]) for axis in self.psd} # formatting width of str(value) for axes
+        # correct float lists min width
         for axis in self.psd:
-            if 'tuple' in self.psd_T[axis]:
-                max_w = 0
-                for e in self.psd[axis]:
-                    if len(str(e)) > max_w: max_w = len(str(e))
-                self.str_W[axis] = max_w
-            # list
-            else:
-                if 'int' in self.psd_T[axis]:
-                    max_w = 0
-                    for e in self.psd[axis]:
-                        if len(str(e)) > max_w: max_w = len(str(e))
-                    self.str_W[axis] = max_w
-                else:
-                    max_dw = 1
-                    if self.psd[axis][1] >= 10:
-                        l = int(round(self.psd[axis][1]))
-                        max_dw = len(str(l))
-                    max_fw = 3
-                    if self.psd[axis][1] < 0.01: max_fw = 6
-                    self.str_W[axis] = max_dw + 1 + max_fw
+            if 'list_float' in self.psd_T[axis] and self.str_W[axis] < 5: self.str_W[axis] = 5
 
 
     # checks if given value belongs to an axis of space
@@ -261,7 +243,6 @@ class PaSpa:
             s += f'{key}:'
             val = p[key]
             vs = str(val)
-            if type(val) is float: vs = f'{val:f}'
             if len(vs) > self.str_W[key]: vs = vs[:self.str_W[key]]
             s += f'{vs:{self.str_W[key]}s} '
         s = s[:-1] + '}'

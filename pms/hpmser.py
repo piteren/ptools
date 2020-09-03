@@ -6,13 +6,12 @@
         > searches hyperparameters space to MAXIMIZE the SCORE for func
 
         MAXIMIZE the SCORE == find points cluster with:
-         - high smooth_score
+         - high num of points in a small distance (dst)
+         - high max smooth_score
          - high lowest score
-         - small dst
-         - high num of points
 
-         policy of sampling the space is crucial, it determines the speed, top result and convergence of the hpmser
-         - fully random sampling is slow and wastes a lot of computing power and time
+         policy of sampling the space is crucial (determines the speed, top result and convergence)
+         - fully random sampling is slow, wastes a lot of time and computing power
          - too aggressive sampling may undersample the space and miss the MAX
 
     parameters:
@@ -21,7 +20,7 @@
             > may have optional ‘device’ or ‘devices’ parameter - for NN, to run on given CUDA device
             > returns: a dict with ‘score’ key or a single value (score)
         psd - dictionary with parameters space to search in, check PaSpa @putils.neuralmess.params_dict
-        def_kwargs - dict with other parameters of func
+        func_defaults - dict with other parameters of func (not to be optimized)
         devices - devices to use by hpmser, (syntax: check @ptools.neuralmess.dev_manager)
 
 """
@@ -64,12 +63,15 @@ class SeRes:
         self.smooth_score = score # default, to be updated
 
 
-# calculates smooth score for given point (+ avg distance and all scores)
+# for given point of space calculates
+# - its smooth score calculated with np_smooth(int) closest points from search_RL
+# - avg_dst: average distance between given point and its np_smooth closest points
+# - all scores: scores aof all np_smooth points
 def _smooth_score(
         point :dict,
         search_RL :List[SeRes],
         paspa :PaSpa,
-        np_smooth :int):        # n points 4 smooth, should be > 0
+        np_smooth :int):
 
     # case: no points in search_RL
     ss_np = 0
@@ -78,9 +80,9 @@ def _smooth_score(
 
     if search_RL:
 
-        sd = [[search_RL[srIX].score, paspa.dist(point, search_RL[srIX].point)] for srIX in range(len(search_RL))] # [[score,dist],..]
+        sd = [[search_RL[srIX].score, paspa.dist(point, search_RL[srIX].point)] for srIX in range(len(search_RL))] # [[score,dst],..]
         sd.sort(key= lambda x: x[1]) # sort by distance to this point
-        sd_np = sd[:np_smooth+1] # trim (+1 point for reference)
+        sd_np = sd[:np_smooth+1] # trim to np_smooth points (+1 point for reference)
 
         # one/two points case
         if len(sd_np) < 3:
@@ -89,7 +91,7 @@ def _smooth_score(
         else:
             all_scores, all_dst = zip(*sd_np) # scores, distances
 
-            max_dst = all_dst[-1] # distance of last point
+            max_dst = all_dst[-1] # distance of last(reference) point
 
             # trim them
             all_dst = all_dst[:-1]
@@ -218,20 +220,22 @@ def _get_opt_sample(
 # prepares nice string results
 def _nice_results_str(
         name,
-        search_RL :List[SeRes], # should be sorted and smoothed
+        search_RL :List[SeRes],
         paspa :PaSpa,
         n_top=                  20,
         all_nps :int or None=   3):
 
     re_str = ''
-    if all_nps:
-        re_str += f'Search run {name} - {len(search_RL)} results (by smooth_score):\n\n{paspa}\n\n'
-        re_str += '  id smooth [ local] [  max-min  ] avg_dst {params...}\n\n'
+    if all_nps: re_str += f'Search run {name} - {len(search_RL)} results (by smooth_score):\n\n{paspa}\n\n'
 
     if len(search_RL) < n_top: n_top = len(search_RL)
     for nps in NP_SMOOTH:
         avg_dst = _smooth_and_sort(search_RL, paspa, nps)
-        re_str += f'TOP {n_top} results for NPS {nps} (avg_dst:{avg_dst:.3f}):\n'
+
+        re_str += f'TOP {n_top} results for NPS {nps} (avg_dst:{avg_dst:.3f}):'
+        if NP_SMOOTH.index(nps) == 0: re_str += ' /// id smooth [ local] [  max-min  ] avg_dst {params...}\n'
+        else: re_str += '\n'
+
         for srIX in range(n_top):
             sr = search_RL[srIX]
             ss_np, avg_dst, all_scores = _smooth_score(sr.point, search_RL, paspa, nps)
@@ -373,21 +377,23 @@ def update_config(
 @timing
 def hpmser(
         func :Callable,                             # function which parameters need to be optimized, has to return score or {'score': score}
-        psd :dict,                                  # dictionary defining the space of parameters
+        psd :dict,                                  # function params space for search
+        func_defaults :dict=        None,           # function defaults
         name :str=                  None,           # for None stamp will be used
         add_stamp=                  True,           # adds short stamp to name, when name given
-        np_smooth :int=             3,              # number of points for smoothing
-        prob_opt=                   0.5,            # probability of optimized sample
-        n_opt=                      50,             # number of optimized samples
-        prob_top=                   0.0,            # probability of sample from area of top
-        n_top=                      20,             # number of top samples
-        def_kwargs :dict=           None,           # func kwargs (~constants)
+            # sampling process parameters
+        np_smooth :int=             3,              # number of points used for smoothing
+        prob_opt=                   0.5,            # probability of sampling from estimated space (optimized)
+        n_opt=                      50,             # number of points taken from estimated space
+        prob_top=                   0.0,            # probability of sampling from area of top points
+        n_top=                      20,             # number of points taken from area of top points
+        use_config=                 True,           # uses config file to set/log settings
+            # process envy options
         devices=                    None,           # devices to use for search
         use_all_cores=              True,           # True: when devices is None >> uses all cores, otherwise as set by devices
         subprocess=                 True,           # True: runs func in subprocesses, otherwise in this process
         n_loops=                    None,           # limit for number of search loops
         hpmser_FD : str or bool=    None,           # folder, where save search results and html, for None does not save, for True uses default
-        use_config=                 True,           # uses config file to set/log settings
         top_show_freq=              20,
         verb=                       1):
 
@@ -434,10 +440,10 @@ def hpmser(
 
     loop_func = interface_wrap_MP_H if subprocess else interface_wrap_H
 
-    # manage def_kwargs
-    if not def_kwargs: def_kwargs = {}
+    # manage func_defaults, remove psd keys from func_defaults
+    if not func_defaults: func_defaults = {}
     for k in psd:
-        if k in def_kwargs: def_kwargs.pop(k)
+        if k in func_defaults: func_defaults.pop(k)
 
     cpa, cpb = paspa.sample_corners()
     avg_dst = 1
@@ -483,7 +489,7 @@ def hpmser(
                     spoint=     spoint,
                     est_score=  est_score,
                     s_time=     time.time(),
-                    **def_kwargs)
+                    **func_defaults)
 
             # get from que at least one
             res = wrap_que.get()
@@ -594,7 +600,7 @@ def example_hpmser(
     hpmser(
         func=       some_func,
         psd=        psd,
-        def_kwargs= {'name':'pio', 'a':3, 'wait':av_time*2, 'verb':verb-1},
+        func_const_kwargs= {'name': 'pio', 'a':3, 'wait': av_time * 2, 'verb': verb - 1},
         devices=    [None]*n_proc,
         #subprocess= False,
         hpmser_FD=  True,

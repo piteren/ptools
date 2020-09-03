@@ -8,11 +8,7 @@ import numpy as np
 import os
 import random
 
-from putils.lipytools.little_methods import r_pickle, w_pickle
-from putils.neuralmess.vext.USE import UnSeEn
-from putils.neuralmess.vext.fastText.fasttextVectorManager import FTVec
-from putils.neuralmess.vext.gpt_encoder.bpencoder import BPEncoder, get_encoder
-
+from ptools.lipytools.little_methods import r_pickle, w_pickle
 
 # calculates sizes of DATA_PARTS in data
 def data_size(data):
@@ -100,6 +96,12 @@ class UDD(dict):
             TRtks: list or tuple =  None,
             TRseq: list or tuple =  None,
             TRlbl: list =           None,
+            # valid
+            VLsen: list or tuple =  None,
+            VLvec: list or tuple =  None,
+            VLtks: list or tuple =  None,
+            VLseq: list or tuple =  None,
+            VLlbl: list =           None,
             # test
             TSsen: list or tuple =  None,
             TSvec: list or tuple =  None,
@@ -120,11 +122,11 @@ class UDD(dict):
         self['TRseq'] = TRseq
         self['TRlbl'] = TRlbl
 
-        self['VLsen'] = None
-        self['VLvec'] = None
-        self['VLtks'] = None
-        self['VLseq'] = None
-        self['VLlbl'] = None
+        self['VLsen'] = VLsen
+        self['VLvec'] = VLvec
+        self['VLtks'] = VLtks
+        self['VLseq'] = VLseq
+        self['VLlbl'] = VLlbl
 
         self['TSsen'] = TSsen
         self['TSvec'] = TSvec
@@ -145,9 +147,9 @@ class UDD(dict):
         # - lists of lists or empty list for lbl
         for key in self.keys():
             if 'lbl' not in key:
+                # assumes that tuple of lists is properly given
                 if type(self[key]) is list: self[key] = (self[key],)            # enclose list into tuple
                 if self[key] is None:       self[key] = ()                      # empty tuple
-                # assumes proper format if given as tuple
             elif not self[key]:             self[key] = []                      # empty labels list (for no lables)
 
         self.__invert_labels()
@@ -178,7 +180,7 @@ class UDD(dict):
 
     # splits TS & VL from TR as it would be given by user (fixes TS & VL for DVCData)
     def early_split(self, seed, vl_split=0.0, ts_split=0.1):
-        self.update(split(self,seed,vl_split,ts_split))
+        self.update(split(self, seed, vl_split, ts_split))
 
 # keeps data for DVC
 class DVCData:
@@ -193,22 +195,17 @@ class DVCData:
             self,
             uDD: UDD=                       None,   # for None uses ONLY cache
             # preparation settings
+            translate_labels=               True,   # translates labels to ints (may be false for labels given as ints)
             merge_multisen=                 False,  # merges uDD multi-sen into one sequence
             seed=                           12321,  # seed for random shuffle of data (for data distribution)
             vl_split=                       0.1,    # VL data split (from TR)
             ts_split=                       0.1,    # TS data split (from TR)
             cache_file=                     None,   # path to cache file
-            use: UnSeEn or bool =           None,   # object or True (for default)
-            ftVEC: FTVec or bool=           None,   # object or True (for default)
-            bpeENC: BPEncoder or bool =     None,   # object or True (for default)
-            limitNT=                        None,   # upper limit of num tokens in seq (FT,BPE) before padding, if exceeded then trim
             # TODO: mergeAB=                None,   # token int, merges tokens sequences into one (with token separator)
             verb=                           0):
 
         self.verb = verb
         if self.verb > 0: print('\n*** DVCdata *** initializes...')
-
-        assert not (ftVEC and bpeENC), 'Error, cannot process texts with FT and BPE!'
 
         if cache_file and os.path.isfile(cache_file):
             if self.verb > 0: print(' > loading the data from cache (%s)...' % cache_file)
@@ -224,58 +221,12 @@ class DVCData:
                     for ls in uDD[key]: # every list from tuple
                         all_texts += ls
 
-            # process texts with USE,FT,BPE
-            if all_texts:
-                if self.verb > 0: print(' > got %d sentences from uDD' % len(all_texts))
-                # default encoders
-                if use is True: use = UnSeEn(verb=verb)
-                if ftVEC is True: ftVEC = FTVec()
-                if bpeENC is True: bpeENC = get_encoder()
-
-                text_vecs = [] # here put (single)vectors from sentences
-                if use:
-                    if self.verb > 0: print(' > encoding with USE >> vec')
-                    text_vecs = use.make_emb(all_texts)
-
-                text_toks = [] # here put token sequences from sentences
-                if ftVEC:
-                    if self.verb > 0: print(' > encoding with FT >> tks')
-                    text_toks = ftVEC.tksFromSL(senL=all_texts, limitNT=limitNT, padTo=None)
-                if bpeENC:
-                    if self.verb > 0: print(' > encoding with BPE >> tks')
-                    padID = len(bpeENC.decoder) - 1
-                    maxLen = 0
-                    for txt in all_texts:
-                        tks = bpeENC.encode(txt)
-                        if limitNT: tks = tks[:limitNT]
-                        if maxLen < len(tks): maxLen = len(tks)
-                        text_toks.append(tks)
-                    for tks in text_toks:
-                        while len(tks) < maxLen: tks.append(padID)
-
-                # split generated vec or tks among uDD keys
-                for key in uDD.keys():
-                    if 'sen' in key:
-                        for ls in uDD[key]:
-                            cut = len(ls)
-                            if text_vecs:
-                                nowKey = key[:-3] + 'vec'
-                                if type(uDD[nowKey]) is tuple: uDD[nowKey] = [] # convert to list (temporary)
-                                uDD[nowKey].append(text_vecs[:cut])
-                                text_vecs = text_vecs[cut:]
-                            if text_toks:
-                                nowKey = key[:-3] + 'tks'
-                                if type(uDD[nowKey]) is tuple: uDD[nowKey] = [] # convert to list (temporary)
-                                uDD[nowKey].append(text_toks[:cut])
-                                text_toks = text_toks[cut:]
-
-                # convert lists back to tuples
-                for key in uDD.keys():
-                    if 'lbl' not in key:
-                        if type(uDD[key]) is list: uDD[key] = tuple(uDD[key])
-
             # prepare lbl_dictL [list (per classifier) of labels dictionaries (list of dictionaries) that translate each label to int <0,n-1>]
-            lbl_dictL = [{lab: x for x, lab in enumerate(sorted(set(c_lab)))} for c_lab in uDD['TRlbl']] if uDD['TRlbl'] else None
+            if not translate_labels:
+                max_L = [max(c_lab) for c_lab in uDD['TRlbl']]
+                lbl_dictL = [{x: x for x in range(mx+1)} for mx in max_L]
+            else:
+                lbl_dictL = [{lab: x for x, lab in enumerate(sorted(set(c_lab)))} for c_lab in uDD['TRlbl']] if uDD['TRlbl'] else None
             # and translate
             for key in uDD.keys():
                 if 'lbl' in key:  # label key

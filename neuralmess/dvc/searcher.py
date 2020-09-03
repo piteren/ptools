@@ -21,8 +21,8 @@ from ptools.pms.paspa import PaSpa
 from ptools.pms.paradict import ParaDict
 from ptools.mpython.qmp import QueMultiProcessor
 
-from putils.neuralmess.dvc.data import DVCData
-from putils.neuralmess.dvc.starter import DVCStarter
+from ptools.neuralmess.dvc.data import DVCData
+from ptools.neuralmess.dvc.starter import DVCStarter
 
 
 # search result
@@ -214,7 +214,7 @@ class DVCSearcher:
 
         self.mdict = dvc_dict
         if type(self.mdict) is not ParaDict:
-            self.mdict = ParaDict(name='mdict', dct=dvc_presets['dvc_base'], verb=self.verb-1)
+            self.mdict = ParaDict(dvc_presets['dvc_base'], verb=self.verb-1)
             dvc_dict['verb'] = 0  # override model verb
             self.mdict.refresh(dvc_dict)
 
@@ -355,8 +355,8 @@ class DVCSearcher:
 # sample running code
 if __name__ == '__main__':
 
-    from putils.neuralmess.dvc.data import UDD
-    from putils.neuralmess.dvc.presets import dvc_presets
+    from ptools.neuralmess.dvc.data import UDD
+    from ptools.neuralmess.dvc.presets import dvc_presets
 
     udd = UDD(
         TRsen=      (['This is sentence A.','This is sentence B']),

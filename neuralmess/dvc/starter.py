@@ -3,23 +3,24 @@
  2018 (c) piteren
 
  DVC Starter
- - builds DVC model for sentence training/test
+ - builds DVC model with training/test methods
 
 """
 
 import numpy as np
+import os
 import shutil
 from sklearn.metrics import f1_score
 import tensorflow as tf
+from tensorflow.python.framework import graph_util
 import time
 
-from putils.neuralmess.dev_manager import tf_devices
-from putils.neuralmess.dvc.presets import dvc_presets
-from putils.pms.paradict import ParaDict
-from putils.neuralmess.nemodel import NEModel
-from putils.neuralmess.dvc.data import UDD, DVCData
-from putils.neuralmess.dvc.model import dvc_model
-from putils.neuralmess.dvc.batcher import DVCBatcher
+from ptools.neuralmess.dev_manager import tf_devices
+from ptools.pms.paradict import ParaDict
+from ptools.neuralmess.nemodel import NEModel
+from ptools.neuralmess.dvc.data import UDD, DVCData
+from ptools.neuralmess.dvc.model import dvc_model
+from ptools.neuralmess.dvc.batcher import DVCBatcher
 
 # prepares report from all_results (train)
 def report_all_results(ar, if_lables=None, lbl_dict=None):
@@ -55,6 +56,7 @@ class DVCStarter:
     def __init__(
             self,
             dvc_dict :dict or ParaDict,         # model dict
+            without_drop=           False,      # forces no dropout layers
             dvc_data :DVCData=      None,
             dvc_dd :dict=           None,       # dict to unpack for DVCData constructor
             seed :int=              12321,      # overrides seed of model, data, batcher
@@ -62,21 +64,25 @@ class DVCStarter:
             name_timestamp=         True,       # adds timestamp to model name
             devices=                -1,         # single device supported
             rand_batcher=           True,       # for None sets automatic, True is recommended
-            save_TFD: str=          '.',        # save top folder (of starter)
+            save_TFD: str=          '_models',  # top folder for saves
             do_mlog=                True,       # model does own logging (saves txt to its folder)
             do_TX=                  True,       # prints txt reports while training
             do_TB=                  True,       # run TB
             ckpt_load: str=         'TM',       # checkpoint type to load while init
-            init_DBM=               False,      # builds Data, Batcher, Model
+            build=                  False,      # builds Data, Batcher, Model
             verb=                   1):
 
         self.verb = verb
         if self.verb > 0: print('\n*** DVC_starter *** initializes...')
 
-        self.mdict = dvc_dict
-        if type(self.mdict) is not ParaDict:
-            self.mdict = ParaDict(dvc_presets['dvc_base'], verb=self.verb-1)
-            self.mdict.refresh(dvc_dict)
+        self.mdict = ParaDict(dvc_presets['dvc_base'], verb=self.verb - 1)
+        self.mdict.refresh(dvc_dict)
+
+        # zero dropout
+        if without_drop:
+            for key in self.mdict:
+                if '_drop' in key:
+                    self.mdict[key] = 0.0
 
         self.seed = seed
 
@@ -84,13 +90,16 @@ class DVCStarter:
 
         self.rand_batcher = rand_batcher
         self.dvc_data = dvc_data if not dvc_dd else DVCData(**dvc_dd)
+
         self.save_TFD = save_TFD
+        if not os.path.isdir(self.save_TFD): os.mkdir(self.save_TFD)
+
         self.do_mlog = do_mlog
         self.do_TX = do_TX
         self.do_TB = do_TB
         self.ckpt_load = ckpt_load
 
-        # model base name of starter, since m_seed training needs to be kept separately (timestamp will be added while building: @__build_DBM)
+        # model base name of starter, since m_seed training needs to be kept separately (timestamp will be added while building: @__build())
         self.name_base = self.mdict['name']
         if not self.name_base: self.name_base = 'dvc' # default name
         if custom_name: self.name_base = custom_name # custom name
@@ -99,14 +108,14 @@ class DVCStarter:
         self.model = None
         self.batcher = None
         self.batch_ix = 0
-        if init_DBM:
-            build_results = self.__build_DBM(seed=self.seed, verb=self.verb)
+
+        if build:
+            build_results = self.__build(seed=self.seed, verb=self.verb)
             self.model =    build_results['model']
             self.batcher =  build_results['batcher']
-            self.batch_ix = build_results['batch_ix']
 
-    # builds batcher & model with given seed, sets new distribution of data
-    def __build_DBM(
+    # builds objects: batcher & model (with given seed), sets new distribution of data
+    def __build(
             self,
             seed :int,
             seed_data=  True, # for false uses fixed data seed
@@ -128,7 +137,7 @@ class DVCStarter:
             do_opt=         do_opt,
             mdict=          self.mdict,
             name_timestamp= self.name_timestamp,
-            save_TFD=       self.save_TFD + '/_models',
+            save_TFD=       self.save_TFD,
             savers_names=   ('VL','TM'),
             load_saver=     self.ckpt_load,
             do_log=         self.do_mlog,
@@ -143,25 +152,24 @@ class DVCStarter:
 
         return {
             'model':    model,
-            'batcher':  batcher,
-            'batch_ix': 0}
+            'batcher':  batcher}
 
     # trains model
     def train(
             self,
             n_batches=      2000,
-            m_seed: int=    1,          # for 2 or more runs M multi_seed training
+            m_seed: int=    1,          # for 2 or more runs N multi_seed training
             ms_data=        True,       # multi_seed for data distribution and batcher
             ms_model=       True,       # multi_seed for model architecture (TF: init, drop)
             # validation
             fq_VL=          50,         # frequency of VL
             save_max_VL=    True,       # save model for max VL
-            validation_TS=  True,       # perform TS after validation
+            save_for_F1=    False,      # save model for max F1, (False: ACC)
+            test_after_VL=  True,       # perform TS after validation
             # reporting
             fq_AVG=         10,         # (base) frequency of averaging (acc,loss) >> txt reports
             fqM_TB=         1,          # frequency *M (fq_AVG*M) of TB reports (scalars)
             fqM_HTB=        0,          # frequency *M (fq_AVG*M) of HTB reports (histograms)
-            zeros_it=       (50,500),   # intervals for zeros reporting
             # finally
             close=          True,       # close model after test
             delete_MFD=     True):      # delete model folders after training
@@ -190,14 +198,14 @@ class DVCStarter:
             seed = self.seed + msix # counted seed
 
             if m_seed>1 or not self.model:
-                build_results = self.__build_DBM(
+                build_results = self.__build(
                     seed=       seed,
                     seed_data=  ms_data,
                     seed_model= ms_model,
                     verb=       self.verb-1 if m_seed==1 else 0)
                 self.model =    build_results['model']
                 self.batcher =  build_results['batcher']
-                self.batch_ix = build_results['batch_ix']
+                self.batch_ix = 0
 
             if self.verb > 0: print('\nTraining loop (%d/%d), model %s (seed %d)' % (msix+1,m_seed,self.model['name'],seed))
             # one train loop results (lists (per batch): [[val,step],])
@@ -206,14 +214,18 @@ class DVCStarter:
                 'train.l':      [],
                 'valid.a':      [],
                 'valid.l':      [],
+                'valid.f':      [],
                 'test.a':       [],
                 'test.l':       [],
                 'max_vl_acc':   None,
+                'max_vl_F1':    None,
+                'last_vl_acc':  None,
+                'last_vl_F1':   None,
                 'ts_acc':       None,
                 'ts_loss':      None,
                 'ts_type':      None,
                 'if_pred':      None}
-            indZeros = [[] for _ in zeros_it]
+
             report_stime = time.time() # report start time
             for _ in range(n_batches):
 
@@ -238,7 +250,7 @@ class DVCStarter:
                     self.model['avt_gg_norm'],
                     self.model['scaled_LR'],
                     self.model['optimizer'],
-                    self.model['nn_zeros']]
+                    self.model['zeroes']]
 
                 if rep_fq_HTB and self.batch_ix%rep_fq_HTB==0 and m_seed==1:
                     fetches.append(self.model['hist_summ'])
@@ -246,13 +258,11 @@ class DVCStarter:
                 runVal = self.model.session.run(fetches, feed)
                 while len(runVal) < 8: runVal.append(None)
 
-                acc, loss, gg_norm, avt_gg_norm, lr, _, nn_zeros, hist_summ = runVal
+                acc, loss, gg_norm, avt_gg_norm, lr, _, zeros, hist_summ = runVal
                 avg_acc += acc*100
                 avg_loss += loss
 
-                if not nn_zeros.size: nn_zeros = [0]
-                if rep_fq_TB:
-                    for ls in indZeros: ls.append(nn_zeros)
+                # TODO: add zeroes processor
 
                 if fq_AVG and self.batch_ix%fq_AVG==0:
                     avg_acc /= fq_AVG
@@ -279,18 +289,6 @@ class DVCStarter:
                         self.model.summ_writer.add_summary(ggn_summ, self.batch_ix)
                         self.model.summ_writer.add_summary(aggn_summ, self.batch_ix)
 
-                        zeros_T0 = np.mean(nn_zeros)
-                        zeros_T0_summ = tf.Summary(value=[tf.Summary.Value(tag='e.zeros/nT0', simple_value=zeros_T0)])
-                        self.model.summ_writer.add_summary(zeros_T0_summ, self.batch_ix)
-                        for ix in range(len(zeros_it)):
-                            cizT = zeros_it[ix]
-                            if len(indZeros[ix]) > cizT - 1:
-                                indZeros[ix] = indZeros[ix][-cizT:]
-                                zerosT = np.mean(np.where(np.mean(np.stack(indZeros[ix], axis=0), axis=0) == 1, 1, 0))
-                                indZeros[ix] = []
-                                zerosTSumm = tf.Summary(value=[tf.Summary.Value(tag='e.zeros/nT%d'%cizT, simple_value=zerosT)])
-                                self.model.summ_writer.add_summary(zerosTSumm, self.batch_ix)
-
                     if hist_summ: self.model.summ_writer.add_summary(hist_summ, self.batch_ix)
 
                     avg_acc, avg_loss = 0, 0
@@ -303,20 +301,34 @@ class DVCStarter:
                         vr = self.test(
                             data_part=  'VL',
                             do_TB=      rep_fq_TB>0)
-                        v_acc = vr[0]
-                        v_lss = vr[1]
-                        if do_TX: print(' >>> %s  acc: %.1f,  loss: %.3f,  f1: %.1f' % ('VL',v_acc,v_lss,vr[2]))
+                        v_ac = vr[0]
+                        v_ls = vr[1]
+                        v_f1 = vr[2]
 
-                        t_res['valid.a'].append([v_acc, self.batch_ix])
-                        t_res['valid.l'].append([vr[1], self.batch_ix])
+                        t_res['valid.a'].append([v_ac, self.batch_ix])
+                        t_res['valid.l'].append([v_ls, self.batch_ix])
+                        t_res['valid.f'].append([v_f1, self.batch_ix])
 
-                        # store max_VL_acc and save if needed
-                        if t_res['max_vl_acc'] is None or v_acc > t_res['max_vl_acc']:
-                            t_res['max_vl_acc'] = v_acc
-                            if save_max_VL: self.model.saver.save('VL', self.batch_ix)
+                        # store max_VL_acc and save model if needed
+                        saved = ''
+                        if t_res['max_vl_acc'] is None or v_ac > t_res['max_vl_acc']:
+                            t_res['max_vl_acc'] = v_ac
+                            if save_max_VL and not save_for_F1:
+                                saved = ' *saved (acc)'
+                                self.model.saver.save('VL', self.batch_ix)
+                        if t_res['max_vl_F1'] is None or v_f1 > t_res['max_vl_F1']:
+                            t_res['max_vl_F1'] = v_f1
+                            if save_max_VL and save_for_F1:
+                                saved = ' *saved (F1)'
+                                self.model.saver.save('VL', self.batch_ix)
+
+                        if do_TX: print(f' >>> VL  acc: {v_ac:.1f}   loss: {v_ls:.3f}   F1: {v_f1:.1f}{saved}')
+
+                        t_res['last_vl_acc'] = v_ac
+                        t_res['last_vl_F1'] = v_f1
 
                     # test data
-                    if validation_TS and self.batcher.data_size['TS'] > 0:
+                    if test_after_VL and self.batcher.data_size['TS'] > 0:
                         tr = self.test(
                             data_part=  'TS',
                             do_TB=      rep_fq_TB>0)
@@ -328,29 +340,33 @@ class DVCStarter:
 
             self.model.saver.save('TM', self.batch_ix)
 
-            # finally test
+            # finally test (on TS corp part)
             if self.batcher.data_size['TS'] > 0:
+
                 if do_TX: print('finally testing:')
-                tr = self.test(
-                    data_part=  'TS',
-                    do_TB=      rep_fq_TB>0)
-                t_acc = tr[0]
-                t_lss = tr[1]
-                if do_TX: print(' >>>(TM) acc: %.2f, loss: %.3f,  f1: %.2f' % (t_acc, t_lss, tr[2]))
-                max_ts_acc = t_acc
-                max_ts_lss = t_lss
+
+                tr = self.test(data_part='TS', do_TB=rep_fq_TB>0)
+                t_ac = tr[0]
+                t_ls = tr[1]
+                t_f1 = tr[2]
+
+                if do_TX: print(f' >>> TM  acc: {t_ac:.2f}  loss: {t_ls:.3f}   F1: {t_f1:.2f}')
+                max_ts_acc = t_ac
+                max_ts_lss = t_ls
                 max_ts_type = 'TM'
+
                 if self.batcher.data_size['VL']>0 and save_max_VL: # do test for VL checkpoint if VL was saved
+
                     self.model.saver.load('VL')
-                    tr = self.test(
-                        data_part=  'TS',
-                        do_TB=      rep_fq_TB>0)
-                    t_acc = tr[0]
-                    t_lss = tr[1]
-                    if do_TX: print(' >>>(VL) acc: %.2f, loss: %.3f,  f1: %.2f'%(t_acc, t_lss, tr[2]))
-                    if t_acc > max_ts_acc:
-                        max_ts_acc = t_acc
-                        max_ts_lss = t_lss
+                    tr = self.test(data_part='TS', do_TB=rep_fq_TB>0)
+                    t_ac = tr[0]
+                    t_ls = tr[1]
+                    t_f1 = tr[2]
+
+                    if do_TX: print(f' >>> VL  acc: {t_ac:.2f}  loss: {t_ls:.3f}   F1: {t_f1:.2f}')
+                    if t_ac > max_ts_acc:
+                        max_ts_acc = t_ac
+                        max_ts_lss = t_ls
                         max_ts_type = 'VL'
 
                 t_res['ts_acc'] =   max_ts_acc
@@ -371,15 +387,18 @@ class DVCStarter:
             # delete model folder
             if delete_MFD:
                 delete_this_run = True
+                # overrides not to delete
                 if self.do_TB:
                     if m_seed==1: delete_this_run = False
                     elif msix+1==m_seed: delete_this_run = False
                 if delete_this_run:
-                    m_folder = self.save_TFD + '/_models'
-                    shutil.rmtree(m_folder + '/' + self.model['name'])
+                    shutil.rmtree(f'{self.save_TFD}/{self.model["name"]}')
 
         all_results = {
             'max_vl_acc':   [],
+            'max_vl_F1':    [],
+            'last_vl_acc':  [],
+            'last_vl_F1':   [],
             'ts_acc':       [],
             'ts_loss':      [],
             'ts_type':      [],
@@ -413,7 +432,7 @@ class DVCStarter:
 
         return all_results
 
-    # tests model with VL or TS part
+    # tests model with VL or TS corp part
     def test(
             self,
             data_part=  'VL',
@@ -451,29 +470,29 @@ class DVCStarter:
 
             runVal = self.model.session.run(fetches, feed)
 
-            pred, acc, loss = runVal
+            pred, ac, ls = runVal
 
             labels_Y += batch['lbl'][-1]
             labels_O += pred.tolist()
 
-            sum_acc += acc*100 * all_batch_size
-            sum_loss += loss * all_batch_size
+            sum_acc += ac*100 * all_batch_size
+            sum_loss += ls * all_batch_size
             n_sampl += all_batch_size
 
-        acc = sum_acc / n_sampl
-        loss = sum_loss / n_sampl
+        ac = sum_acc / n_sampl
+        ls = sum_loss / n_sampl
         f1 = f1_score(labels_Y, labels_O, average='macro')*100
 
         if do_TB:
             tag = 'b.valid' if data_part == 'VL' else 'c.test'
-            acc_summ = tf.Summary(value=[tf.Summary.Value(tag=tag+'/1.acc', simple_value=acc)])
-            lss_summ = tf.Summary(value=[tf.Summary.Value(tag=tag+'/2.loss', simple_value=loss)])
+            acc_summ = tf.Summary(value=[tf.Summary.Value(tag=tag+'/1.acc', simple_value=ac)])
+            lss_summ = tf.Summary(value=[tf.Summary.Value(tag=tag+'/2.loss', simple_value=ls)])
             f1_summ = tf.Summary(value=[tf.Summary.Value(tag=tag+'/3.F1', simple_value=f1)])
             self.model.summ_writer.add_summary(acc_summ, self.batch_ix)
             self.model.summ_writer.add_summary(lss_summ, self.batch_ix)
             self.model.summ_writer.add_summary(f1_summ, self.batch_ix)
 
-        return acc, loss, f1
+        return ac, ls, f1
 
     # runs model IF
     def infer(
@@ -538,6 +557,52 @@ class DVCStarter:
 
         return batch['tksA'], batch['tksB'], batch['lbl'], pred, attVals
 
+    # saves tflite & java models
+    def save_production(
+            self,
+            ckpt_load: str= None,  # checkpoint type to load
+            java=           True,
+            tflite=         True,
+            quantize=       True):
+
+        if ckpt_load: self.model.saver.load(ckpt_load)
+
+        inputs = []
+        for key in ['vec_PHL', 'tks_PHL', 'seq_PHL']:
+            if self.model[key]: inputs += self.model[key]
+        outputs = self.model['mc_probs']
+
+        if self.verb > 0:
+            print('Model inputs:')
+            for i in inputs: print(f' > {i.name}')
+            print('Model outputs:')
+            for o in outputs: print(f' > {o.name}')
+
+        #for n in [n.name for n in self.model.graph.as_graph_def().node]: print(n)
+
+        if java:
+            try:
+                output_node_names = [o.name.split(':')[0] for o in outputs]
+                output_graph_def = graph_util.convert_variables_to_constants(
+                    self.model.session,  # We need to pass session object, it contains all variables
+                    self.model.graph.as_graph_def(),  # also graph definition is necessary
+                    output_node_names)  # we may use multiple nodes for output
+                model_file = f'{self.save_TFD}/{self.name_base}/model.pb'
+                with tf.gfile.GFile(model_file, "wb") as f:
+                    f.write(output_graph_def.SerializeToString())
+                if self.verb > 0: print('java model saved')
+            except: print('\Conversion to java.pb not possible!')
+
+        if tflite:
+            try:
+                converter = tf.compat.v1.lite.TFLiteConverter.from_session(self.model.session, inputs, outputs)
+                if quantize: converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_SIZE]
+                tflite = converter.convert()
+                tflite_save_path = f'{self.save_TFD}/{self.name_base}/model.tflite'
+                open(tflite_save_path, "wb").write(tflite)
+                if self.verb > 0: print('tflite model saved')
+            except: print('\Conversion to tflite not possible!')
+
     """
     # sample code for attention retrieval
     
@@ -591,10 +656,9 @@ if __name__ == '__main__':
         uDD=        udd,
         vl_split=   0,
         ts_split=   0,
-        use=        True,
         verb=       1)
 
-    from putils.neuralmess.dvc.presets import dvc_presets
+    from ptools.neuralmess.dvc.presets import dvc_presets
 
     starter = DVCStarter(
         dvc_data=       dvc_data,

@@ -7,6 +7,7 @@
 """
 
 import tensorflow as tf
+from tensorflow.contrib import rnn
 
 from ptools.neuralmess.base_elements import my_initializer, list_of_layers
 from ptools.neuralmess.layers import lay_res, zeroes, lay_dense, lay_conv1D, attn
@@ -21,7 +22,7 @@ def lay_DRT(
         hist_name=      None,       # family name of histogram
         dns_scale=      4,
         activation=     tf.nn.relu, # gelu is really worth a try
-        dropout=        0.0,        # dropout (after two denses)
+        dropout=        None,       # dropout (after two denses)
         training_flag=  None,       # training flag tensor (for dropout)
         initializer=    None,
         seed=           12321):
@@ -106,7 +107,10 @@ def enc_DRT(
     if lay_width is None:
         lay_width = input.shape.as_list()[-1]
         lay_width_matched = '(lay_width taken form input width)'
-    if verb > 0: print('\nBuilding DRTencoder (%dx%d drop:%.2f) %s...' % (n_layers, lay_width, dropout, lay_width_matched))
+    if verb > 0:
+        drp = 0.0 if not dropout else dropout
+        print(f'\nBuilding DRTencoder ({n_layers}x{lay_width} drop:{drp:.2f}) {lay_width_matched}...')
+    #if verb > 0: print('\nBuilding DRTencoder (%dx%d drop:%.2f) %s...' % (n_layers, lay_width, dropout, lay_width_matched))
 
     if initializer is None: initializer = my_initializer(seed)
 
@@ -124,7 +128,7 @@ def enc_DRT(
                 input=          input,
                 units=          lay_width,
                 use_bias=       False,
-                initializer=    my_initializer(),
+                initializer=    initializer,
                 seed=           seed)
             if verb > 0: print('projected input to layWidth(%d) since it differs(%d)' % (lay_width, iW))
 
@@ -557,6 +561,78 @@ def enc_TNS(
         'att_vals':     att_vals,
         'zeroes':       zsL}
 
+# rnn encoder(for sequence encoding)
+def enc_RNN(
+        input,
+        name=           'enc_RNN',
+        cellFN=         rnn.NASCell,    # cell function (GRUCell NASCell LSTMCell)
+        biDir=          True,
+        cellWidth=      64,
+        numLays=        1,
+        dropout=        0,
+        dropFlagT=      None,       # dropout training flag tensor
+        seed=           12321,
+        n_hist=         4,              # number of histogram layers
+        verb=           0):
+    """
+    bidirectional rnn encoder (wRES)
+    number of parameters for LSTMcell:  8c(e+c+1)
+    number of parameters for NAScell:   16c(e+c)
+    """
+
+    histSumm = []
+    histLayers = list_of_layers(numLays, n_select=n_hist)
+    if verb > 0: print('histogram layers of rnnEncoder:', histLayers)
+
+    with tf.variable_scope(name):
+        if verb > 0: print('building RNNencoder...')
+
+        fCells = [cellFN(cellWidth) for _ in range(numLays)]
+        bCells = [cellFN(cellWidth) for _ in range(numLays)] if biDir else None
+
+        layIN = input
+        for lay in range(len(fCells)):
+
+            histLay = lay in histLayers
+            layName = 'rnnEncLay_%s' % lay
+            with tf.variable_scope(layName):
+
+                if biDir:
+                    # bidirectional rnn layer
+                    layOUT, _ = tf.nn.bidirectional_dynamic_rnn(
+                        cell_fw=    fCells[lay],
+                        cell_bw=    bCells[lay],
+                        inputs=     layIN,
+                        dtype=      tf.float32)
+                    layOUT = tf.concat(layOUT, -1)
+
+                else:
+                    # f direction rnn
+                    layOUT, _ = tf.nn.dynamic_rnn(
+                        cell=       fCells[lay],
+                        inputs=     layIN,
+                        dtype=      tf.float32)
+
+                if histLay: histSumm.append(tf.summary.histogram('a_rnnOut', layOUT, family='tensor'))
+
+                # residual connection
+                layOUT = lay_res(layIN, layOUT)
+                if histLay: histSumm.append(tf.summary.histogram('b_residual', layOUT, family='tensor'))
+
+                # dropout
+                if dropout:
+                    layOUT = tf.layers.dropout(
+                        inputs=     layOUT,
+                        rate=       dropout,
+                        training=   dropFlagT,
+                        seed=       seed)
+                    if histLay: histSumm.append(tf.summary.histogram('c_dropOut', layOUT, family=name))
+
+                layIN = layOUT
+
+    return {
+        'output':   layOUT,
+        'histSumm': histSumm}
 
 if __name__ == "__main__":
 

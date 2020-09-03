@@ -25,9 +25,11 @@ class MultiSaver:
             session=            None,
             verb=               0):
 
-        if not os.path.isdir(root_FD): os.mkdir(root_FD)
-        self.save_FD = f'{root_FD}/{model_name}'
-        if not os.path.isdir(self.save_FD): os.mkdir(self.save_FD)
+        self.save_FD = None
+        if root_FD:
+            if not os.path.isdir(root_FD): os.mkdir(root_FD)
+            self.save_FD = f'{root_FD}/{model_name}'
+            if not os.path.isdir(self.save_FD): os.mkdir(self.save_FD)
 
         self.verb = verb
         self.model_name = model_name
@@ -63,6 +65,7 @@ class MultiSaver:
             session=    None):
 
         assert saver in self.savers, 'ERR: unknown saver'
+        assert self.save_FD, 'ERR: cannot save without folder'
 
         sv_name = ' ' + saver if saver else ''
         if self.verb > 0: print('MultiSaver%s saves variables...' % sv_name)
@@ -102,8 +105,8 @@ class MultiSaver:
             latest_filename = 'checkpoint'
             if saver: latest_filename += '_' + saver
             ckpt = tf.train.latest_checkpoint(
-                checkpoint_dir=self.save_FD + '/' + var,
-                latest_filename=    latest_filename)
+                checkpoint_dir=     self.save_FD + '/' + var,
+                latest_filename=    latest_filename) if self.save_FD else None
 
             if ckpt:
                 if self.verb > 1:

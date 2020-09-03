@@ -76,14 +76,14 @@ def lay_dense(
         seed=           12321):
 
     if initializer is None: initializer = my_initializer(seed)
-    denseLay = tf.layers.Dense(
+    dense_lay = tf.layers.Dense(
         units=              units,
         activation=         activation,
         use_bias=           use_bias,
         kernel_initializer= initializer,
         name=               name,
         _reuse=             reuse)
-    output = denseLay(input)
+    output = dense_lay(input)
     return output
 
 # 1d convolution layer, with Gated Linear Unit option

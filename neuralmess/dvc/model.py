@@ -5,48 +5,52 @@
     Deep Vector Classifier - Model
 
     TODO:
-       - seq2seq model (enc_tower is ready >> need to add seq2seq flag for model >> build seq2seq classifiers)
-       - whether seq2seq would advance from reduced vec concatenated to every token
+        - seq2seq model (enc_tower is ready >> need to add seq2seq flag for model >> build seq2seq classifiers)
+        - whether seq2seq would advance from reduced vec concatenated to every token
         - implement regression (classes [1])
 
 """
 
 import tensorflow as tf
 
-from putils.neuralmess.base_elements import gelu
-from putils.neuralmess.layers import lay_dense, tf_drop
-from putils.neuralmess.encoders import enc_CNN, enc_TNS, enc_DRT, enc_RNN
+from ptools.neuralmess.base_elements import gelu
+from ptools.neuralmess.layers import lay_dense, tf_drop
+from ptools.neuralmess.encoders import enc_CNN, enc_TNS, enc_DRT, enc_RNN
 
 # builds single encoding tower graph, from model input to single vector (sub-graph of dvc_model)
 def enc_tower(
         actv_func,                      # activation function
-        vec_PH :tf.placeholder,         # vector placeholder (vec input)
-        tks_PH :tf.placeholder,         # tokens seq placeholder (seq input - IDs)
-        seq_PH :tf.placeholder,         # vector seq placeholder (seq input)
-        train_flag_PH :tf.placeholder,  # train flag placeholder
+        vec_PH :tf.compat.v1.placeholder,       # vector placeholder     (vec input)
+        tks_PH :tf.compat.v1.placeholder,       # tokens seq placeholder (seq input - IDs)
+        seq_PH :tf.compat.v1.placeholder,       # vector seq placeholder (seq input)
+        train_flag_PH :tf.compat.v1.placeholder,# train flag placeholder
         tok_emb,
-        train_TE :bool,
+        tok_emb_train :bool,            # flag, when True tok_emb are trainable
         tok_emb_add,                    # np.arr/LL with values of additional embeddings (always trainable)
-        max_seq_len,
+            # vectors processing
         inV_drop :float,
         inV_proj :int or None,          # value equal to last dimension width turns-off projection
+        drt_nLay,
+        drt_scale,
+        drt_drop,
+            # sequence params
         inS_drop :float,
         intime_drop :float,
         infeat_drop :float,
         inS_proj :int or None,          # value equal to last dimension width turns-off projection
         inS_actv :bool,                 # inS_proj activation
-        drt_scale,
-        tns_scale,
+            # seq encoders params
         cnn_nLay,
-        lstm_nLay,
+        rnn_nLay,
+        max_seq_len,
         tns_nBlocks,
         enc_drop,
         tnsAT_drop,
+        tns_scale,
         tat_nBlocks,
         tatAT_drop,
         tat_drop,
-        drt_nLay,
-        drt_drop,
+            # other
         seed,
         verb,
         **kwargs):
@@ -86,7 +90,7 @@ def enc_tower(
                     input=      vector,
                     units=      inV_proj,
                     activation= None,
-                    use_bias=    True,
+                    use_bias=   True,
                     seed=       seed,
                     name=       'inVProjection')
                 if verb > 1: print(' > projected vector input:', vector)
@@ -109,7 +113,7 @@ def enc_tower(
                     dropout=        drt_drop,
                     training_flag=  train_flag_PH,
                     seed=           seed,
-                    n_hist=            2,
+                    n_hist=         2,
                     verb=           verb)
                 vector =        eDRTout['output']
                 zsL +=          eDRTout['zeroes']
@@ -119,52 +123,53 @@ def enc_tower(
 
             vectorL.append(vector)
 
-        # ********************************* tokens embedding for sequence
+        # ********************************* sequence processing
+        sequence = None
         seq_to_concat = []
+
+        # tokens embedding for sequence
         if tks_PH is not None:
             if type(tok_emb) is tuple:
-                allEmb = tf.get_variable( # embeddings initialized from scratch
-                    name=           'tokEmbV',
+                all_emb = tf.get_variable( # embeddings initialized from scratch
+                    name=           'tok_emb',
                     shape=          tok_emb,
                     initializer=    tf.truncated_normal_initializer(stddev=0.01, seed=seed),
                     dtype=          tf.float32,
                     trainable=      True)
             else:
-                allEmb = tf.get_variable( # embeddings initialized with given variable
-                    name=           'tokEmbV',
+                all_emb = tf.get_variable( # embeddings initialized with given variable
+                    name=           'tok_emb',
                     initializer=    tok_emb,
                     dtype=          tf.float32,
-                    trainable=      train_TE)
+                    trainable=      tok_emb_train)
             if tok_emb_add is not None:
                 tokEmbAddV = tf.get_variable( # add embeddings initialized with given variable
-                    name=           'tokEmbAdd',
+                    name=           'tok_emb_add',
                     initializer=    tok_emb_add,
                     dtype=          tf.float32,
                     trainable=      True)
-                allEmb = tf.concat([allEmb, tokEmbAddV], axis=0)
+                all_emb = tf.concat([all_emb, tokEmbAddV], axis=0)
 
-            sequence = tf.nn.embedding_lookup(params=allEmb, ids=tks_PH)
+            sequence = tf.nn.embedding_lookup(params=all_emb, ids=tks_PH)
             if verb > 1: print('\n > sequence (tokens lookup):', sequence)
             hist_summ.append(tf.summary.histogram('1seqT', sequence, family='B.seq'))
             seq_to_concat.append(sequence)
 
-        sequence = None
         if seq_PH is not None:
             if verb > 1: print(' > sequence of vectors:', seq_PH)
             hist_summ.append(tf.summary.histogram('1seqV', seq_PH, family='B.seq'))
             seq_to_concat.append(seq_PH)
+
+        # concat sequences
+        if len(seq_to_concat)== 1:
+            sequence = seq_to_concat[0]
         if len(seq_to_concat) > 2:
-            """
+            # it will work only when shapes match !!!
             sequence = tf.concat(seq_to_concat, axis=1)
             if verb > 1: print(' > concatenated sequence (vec+tok):', sequence)
-            """
-            assert False, 'Need to match shapes (to.do)...'  # do it if needed
-        if len(seq_to_concat) == 1: sequence = seq_to_concat[0]
 
-        # ********************************* sequence processing
         if sequence is not None:
-
-            # dropout (applied to seq of tokEmb works much better than applied after projection)
+            # dropout (applied to seq of tok_emb works much better than applied after projection)
             if inS_drop:
                 sequence = tf.layers.dropout(
                     inputs=     sequence,
@@ -174,12 +179,13 @@ def enc_tower(
                 if verb > 1: print(' > dropout %.2f applied to seq:' % inS_drop, sequence)
 
             # time & feats drop
-            sequence = tf_drop(
-                input=      sequence,
-                time_drop=  intime_drop,
-                feat_drop=  infeat_drop,
-                train_flag= train_flag_PH,
-                seed=       seed)
+            if intime_drop or infeat_drop:
+                sequence = tf_drop(
+                    input=      sequence,
+                    time_drop=  intime_drop,
+                    feat_drop=  infeat_drop,
+                    train_flag= train_flag_PH,
+                    seed=       seed)
 
             # sequence layer_norm (on (dropped)input, always)
             sequence = tf.contrib.layers.layer_norm(
@@ -195,7 +201,7 @@ def enc_tower(
                     input=      sequence,
                     units=      inS_proj,
                     activation= actv_func if inS_actv else None,
-                    use_bias=    True,
+                    use_bias=   True,
                     seed=       seed,
                     name=       'inSProjection')
                 if verb > 1: print(' > inProjection (%d) for seq:' % inS_proj, sequence)
@@ -214,25 +220,25 @@ def enc_tower(
             if cnn_nLay:
                 eCOut = enc_CNN(
                     input=          sequence,
-                    n_layers=        cnn_nLay,
+                    n_layers=       cnn_nLay,
                     activation=     actv_func,
-                    dropout=        enc_drop,
-                    training_flag=      train_flag_PH,
-                    n_filters=       enc_width,
-                    n_hist=            2,
+                    lay_drop=       enc_drop,
+                    training_flag=  train_flag_PH,
+                    n_filters=      enc_width,
+                    n_hist=         2,
                     seed=           seed,
-                    verb=        verb)
+                    verb=           verb)
                 sequence = eCOut['output']
                 hist_summ += eCOut['hist_summ']
 
-            if lstm_nLay:
+            if rnn_nLay:
                 from tensorflow.contrib import rnn
                 eLOut = enc_RNN(
                     input=          sequence,
                     cellFN=         rnn.LSTMCell,
                     biDir=          False,
                     cellWidth=      enc_width,
-                    numLays=        lstm_nLay,
+                    numLays=        rnn_nLay,
                     dropout=        enc_drop,
                     dropFlagT=      train_flag_PH,
                     seed=           seed)
@@ -251,7 +257,7 @@ def enc_tower(
                     dropout=        enc_drop,
                     drop_flag=      train_flag_PH,
                     seed=           seed,
-                    n_hist=        2,
+                    n_hist=         2,
                     verb=           verb)
                 sequence =      tns_out['output']
                 hist_summ +=    tns_out['hist_summ']
@@ -273,11 +279,11 @@ def enc_tower(
                     dropout=        tat_drop,
                     drop_flag=      train_flag_PH,
                     seed=           seed,
-                    n_hist=        2,
+                    n_hist=         2,
                     verb=           verb)
                 sequence_reduced =  tat_out['output']
                 hist_summ +=        tat_out['hist_summ']
-                attVals =           tat_out['att_vals']
+                # attVals =           tat_out['att_vals']
                 zsL +=              tat_out['zeroes']
 
             # reduce sequence with concat of avg & max
@@ -298,20 +304,20 @@ def enc_tower(
         'sequence':     sequence,
         'tower_vars':   tower_vars,
         'hist_summ':    hist_summ,
-        'zeroes':        zsL}
+        'zeroes':       zsL}
 
 
 # builds DVC model graph
 def dvc_model(
-        seed :int,              # seed for TF OPs
+        seed :int,                  # seed for TF OPs
         multi_sen :int,
         train_tower :bool,
         vec_width :int,
-        tok_emb,                # tuple with embeddings shape or np.arr/LL with values of embeddings
+        tok_emb,                    # tuple with embeddings shape or np.arr/LL with values of embeddings
         seq_width :int,
         max_seq_len: int,
-        drt_scale :float or int,
-        classes :int or list,   # (Multi-Classif)
+        drt_scale :float or int,    # global DRT scale
+        classes :int or list,       # (Multi-Classif)
         vtc_drop :float,
         vtc_proj :int,
         drtC_nLay :int,
@@ -343,29 +349,29 @@ def dvc_model(
     with tf.variable_scope(name_or_scope='FWD'):
 
         # ********************************* input placeholders
-        vec_PHL = [tf.placeholder(
-            name=       'vec%dPH'%nS,
+        vec_PHL = [tf.compat.v1.placeholder(
+            name=       'vec%d_PH'%nS,
             dtype=      tf.float32,
             shape=      [None, vec_width]) for nS in range(multi_sen)] if isVec else None
 
-        tks_PHL = [tf.placeholder(
-            name=       'tks%dPH'%nS,
+        tks_PHL = [tf.compat.v1.placeholder(
+            name=       'tks%d_PH'%nS,
             dtype=      tf.int32,
             shape=      [None,max_seq_len]) for nS in range(multi_sen)] if isTks else None # batch, seqLen
 
-        seq_PHL = [tf.placeholder(
-            name=       'seq%dPH'%nS,
+        seq_PHL = [tf.compat.v1.placeholder(
+            name=       'seq%d_PH'%nS,
             dtype=      tf.float32,
             shape=      [None,max_seq_len,seq_width]) for nS in range(multi_sen)] if isSeq else None # batch, seqLen, vec
 
-        lab_PHL = [tf.placeholder(
-            name=       'labC%dID'%nC,
+        lab_PHL = [tf.compat.v1.placeholder(
+            name=       'labC%d_ID'%nC,
             dtype=      tf.int32,
             shape=      [None]) for nC in range(len(classes))]
 
-        train_flag_PH = tf.placeholder(name='trainFlag', dtype=tf.bool, shape=[]) # placeholder marking training process
+        train_flag_PH = tf.compat.v1.placeholder(name='train_flag', dtype=tf.bool, shape=[]) # placeholder marking training process
 
-        # ********************************* eTowers
+        # ********************************* encTowers
         if verb > 0: print('...building %d DVC encTowers' % multi_sen)
         enc_outs = []
         for nS in range(multi_sen):
@@ -414,7 +420,7 @@ def dvc_model(
                     input=      vec_output,
                     units=      vtc_proj,
                     activation= None,
-                    use_bias=    True,
+                    use_bias=   True,
                     seed=       seed,
                     name=       'inVProjection')
                 if verb > 1: print(' > projected vector input:', vec_output)
@@ -428,6 +434,7 @@ def dvc_model(
                 hist_summ.append(tf.summary.histogram('8projLNorm', vec_output, family='C.cls'))
 
             mc_losses = []
+            mc_probs = []
             if verb > 1: print('\nBuilding multi-classifier graphs...')
             for cix in range(len(classes)):
                 if verb > 1: print(' > multi-classifier (%d/%d):' % (cix + 1, len(classes)))
@@ -442,7 +449,7 @@ def dvc_model(
                         dropout=        drtC_drop,
                         training_flag=  train_flag_PH,
                         seed=           seed,
-                        n_hist=            2,
+                        n_hist=         2,
                         verb=           verb)
                     vec_output =    eDRTout['output']
                     zsL +=          eDRTout['zeroes']
@@ -458,13 +465,13 @@ def dvc_model(
                     input=      vec_output,
                     units=      classes[cix],
                     activation= None,
-                    use_bias=    True,
+                    use_bias=   True,
                     seed=       seed,
-                    name=       'outProjection_cix%d'%cix)
+                    name=       'logits_projection_cix%d'%cix)
                 if verb > 1: print(' >> logits (projected)', logits)
                 hist_summ.append(tf.summary.histogram('9logits', logits, family='C.cls'))
 
-                probs = tf.nn.softmax(logits)
+                probs = tf.nn.softmax(logits, name=f'predict_probabilities_c{cix}')
                 predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
                 if verb > 1: print(' >> predictions:', predictions)
                 correct = tf.equal(predictions, lab_PHL[cix])
@@ -485,6 +492,7 @@ def dvc_model(
                 """
 
                 mc_losses.append(cLoss)
+                mc_probs.append(probs)
 
         # average all losses (multi-classifiers losses)
         loss = tf.reduce_mean(tf.stack(mc_losses)) # shape [1]
@@ -533,6 +541,7 @@ def dvc_model(
         'class_vars':       class_vars,     # to save
         # tensors
         'probs':            probs,          # ...of last multi-classifier
+        'mc_probs':         mc_probs,
         'predictions':      predictions,    # ...of last multi-classifier
         'accuracy':         accuracy,       # ...of last multi-classifier
         'loss':             loss,           # avg of all multi-classifiers
@@ -543,7 +552,7 @@ def dvc_model(
 
 if __name__ == '__main__':
 
-    from putils.neuralmess.dvc.presets import dvc_presets
+    from ptools.neuralmess.dvc.presets import dvc_presets
 
     mdict = dvc_presets['dvc_base']
     mdict['verb'] = 2
