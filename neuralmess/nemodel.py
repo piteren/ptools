@@ -149,7 +149,7 @@ class NEModel(dict):
         # save ParaDict (in train mode)
         if do_opt:
             self.mdict.save(self.model_FD)
-            if self.verb > 0: print(' > ParaDict of %s NEModel saved')
+            if self.verb > 0: print(' > ParaDict of NEModel saved')
 
         devices = tf_devices(devices, verb=self.verb)
 

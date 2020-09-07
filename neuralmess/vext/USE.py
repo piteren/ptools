@@ -13,7 +13,7 @@ import tensorflow_hub as hub
 import tf_sentencepiece
 from tqdm import tqdm
 
-from putils.neuralmess.dev_manager import get_cuda_mem, tf_devices
+from ptools.neuralmess.dev_manager import get_cuda_mem, tf_devices
 
 # Universal Sentence Encoder
 class UnSeEn:
@@ -24,7 +24,7 @@ class UnSeEn:
     def __init__(
             self,
             pack_size :int=     0,      # USE embedding pack size (num of sentences in one interation), zero sets automatic
-            device=             '/device:GPU:0',
+            device=             -1,
             to_float16=         False,  # returns data reduced to np.float16
             verb=               0):
 
