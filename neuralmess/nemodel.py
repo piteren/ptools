@@ -129,14 +129,13 @@ class NEModel(dict):
             if do_log: set_logger(logFD=self.model_FD, custom_name=resolved_name, verb=self.verb)
 
         # read mdict file from folder (last saved model parameters)
-        mdict_file = f'{self.model_FD}/mdict.dct' if self.model_FD else None
         pd_ffile = {}
-        if mdict_file:
-            pd_ffile = ParaDict.build(mdict_file)
+        if self.model_FD:
+            pd_ffile = ParaDict.build(folder=self.model_FD, fn_pfx='mdict')
             if not pd_ffile: pd_ffile = {}
-            elif self.verb>0: print(f' > loaded model dict from file: {mdict_file}')
+            elif self.verb>0: print(f' > loaded model dict from .dct file')
 
-        self.mdict = ParaDict(name='mdict', dct=fwdf_mdict) # ParaDict with defaults of fwd_func
+        self.mdict = ParaDict(fwdf_mdict)   # ParaDict with defaults of fwd_func
         self.mdict.update(pd_ffile)         # update(override) with ParaDict from file
         self.mdict.add_new(self_args_dict)  # add new from self_args_dict (extends)
         self.mdict.update(mdict)            # update with mdict
@@ -148,7 +147,7 @@ class NEModel(dict):
 
         # save ParaDict (in train mode)
         if do_opt:
-            self.mdict.save(self.model_FD)
+            self.mdict.save(folder=self.model_FD, fn_pfx='mdict')
             if self.verb > 0: print(' > ParaDict of NEModel saved')
 
         devices = tf_devices(devices, verb=self.verb)

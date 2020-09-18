@@ -10,12 +10,15 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
+
+# min, avg, max ..of num list
+def mam(vals: list):
+    return [min(vals), sum(vals) / len(vals), max(vals)]
+
 # mean, std, min, max (from given list of values or np.arr)
-def msmx(val_list :list or np.array) -> dict:
+def msmx(vals : list or np.array) -> dict:
 
-    arr = val_list
-    if type(val_list) is list: arr = np.asarray(val_list)
-
+    arr = np.asarray(vals) if type(vals) is list else vals
     ret_dict = {
         'mean': float(np.mean(arr)),
         'std':  float(np.std(arr)),

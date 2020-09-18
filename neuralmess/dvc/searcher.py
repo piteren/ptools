@@ -286,7 +286,7 @@ class DVCSearcher:
                     'm_seed':           m_seed,
                     'dvc_data':         self.dvc_data if not self.dvc_dd else None,
                     'dvc_dd':           self.dvc_dd,
-                    'mdict':            self.mdict.get_dict_copy(),
+                    'mdict':            self.mdict.get_copy(),
                     'seed':             self.seed_counter,
                     'rand_batcher':     self.rand_batcher,
                     'root_FD':          self.root_FD,

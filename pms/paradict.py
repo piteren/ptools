@@ -20,12 +20,10 @@ class ParaDict(dict):
 
     def __init__(
             self,
-            name: str,
             dct: dict=          None,
             verb=               0):
 
         super().__init__()
-        self.name = name
         self.verb = verb
         if not dct: dct = {}
 
@@ -100,8 +98,8 @@ class ParaDict(dict):
 
         return found_any
 
-    # returns deepcopy of self dict
-    def get_dict_copy(self): return copy.deepcopy(self)
+    # returns deepcopy of self
+    def get_copy(self): return ParaDict(copy.deepcopy(self))
 
     # converts dict (...of params)
     @staticmethod
@@ -118,17 +116,20 @@ class ParaDict(dict):
     def save(
             self,
             folder: str,
+            fn_pfx: str, # dna filename prefix
             save_txt=   True,
             save_OLD=   True):
 
-        w_pickle(self, f'{folder}/{self.name}.dct')
+        w_pickle(self, f'{folder}/{fn_pfx}.dct')
         if save_txt:
-            md_file_txt = f'{folder}/{self.name}.txt'
+            md_file_txt = f'{folder}/{fn_pfx}.txt'
             if save_OLD and os.path.isfile(md_file_txt):
                 shutil.copy(md_file_txt,md_file_txt+'_OLD')
             with open(md_file_txt, 'w') as file: file.write(str(self))
 
-    # returns ParaDict object from .dct file
+    # returns ParaDict object from .dct file or None if file not exists
     @staticmethod
-    def build(file: str):
-        return r_pickle(file)
+    def build(
+            folder: str,
+            fn_pfx: str): # dna filename prefix
+        return r_pickle(f'{folder}/{fn_pfx}.dct')
