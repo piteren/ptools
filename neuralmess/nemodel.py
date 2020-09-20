@@ -43,10 +43,12 @@ import tensorflow as tf
 
 from ptools.lipytools.logger import set_logger
 from ptools.lipytools.little_methods import get_defaults, short_scin, stamp
+from ptools.lipytools.foldered_dna import FMDna
 from ptools.pms.paradict import ParaDict
-from ptools.neuralmess.base_elements import num_var_floats, lr_scaler, gc_loss_reductor, log_vars
+from ptools.neuralmess.base_elements import num_var_floats, lr_scaler, gc_loss_reductor, log_vars, mrg_ckpts
 from ptools.neuralmess.dev_manager import tf_devices
 from ptools.neuralmess.multi_saver import MultiSaver
+
 
 # restricted keys for fwd_func mdict (model params-arguments dict, if they appear in mdict, should be named exactly like below)
 SPEC_KEYS = [
@@ -60,8 +62,10 @@ SPEC_KEYS = [
     'batch_size',                                       # batch size
     'verb']                                             # fwd_func verbosity
 
+NEMODEL_DNA_PFX = 'mdict'
 
-class NEModel(dict):
+
+class NEModel(dict, FMDna):
 
     def __init__(
             self,
@@ -94,7 +98,8 @@ class NEModel(dict):
             do_log=                     True,       # enables saving log file in folder of NEModel
             verb :int=                  0):         # verb of NEModel (object/constructor), fwd_func has own verb in mdict
 
-        super().__init__() # init self as dict
+        dict.__init__(self) # init self as a dict
+
         self.verb = verb
         if self.verb > 0: print('\n*** NEModel *** initializes...')
 
@@ -114,41 +119,36 @@ class NEModel(dict):
 
         fwdf_mdict = get_defaults(function=fwd_func) # defaults of fwd_func
 
-        # resolve model name (extend with timestamp when needed)
+        # resolve model name and extend with timestamp when needed
         resolved_name =                                 self_args_dict['name']
         if 'name' in fwdf_mdict:    resolved_name =     fwdf_mdict['name']
         if 'name' in mdict:         resolved_name =     mdict['name']
         if name_timestamp:          resolved_name +=    '.' + stamp()
+        mdict['name'] = resolved_name
         if self.verb > 0: print(f' > NEModel name: {resolved_name}')
 
-        # model folder and logger
-        if save_TFD and not os.path.isdir(save_TFD): os.mkdir(save_TFD)
-        self.model_FD = f'{save_TFD}/{resolved_name}' if save_TFD else None
-        if self.model_FD:
-            if not os.path.isdir(self.model_FD): os.mkdir(self.model_FD)
-            if do_log: set_logger(logFD=self.model_FD, custom_name=resolved_name, verb=self.verb)
+        FMDna.__init__(
+            self,
+            topfolder=  save_TFD,
+            name=       mdict['name'],
+            fn_pfx=     NEMODEL_DNA_PFX)
+        self.model_FD = FMDna.get_dna_FD(self)
 
-        # read mdict file from folder (last saved model parameters)
-        pd_ffile = {}
-        if self.model_FD:
-            pd_ffile = ParaDict.build(folder=self.model_FD, fn_pfx='mdict')
-            if not pd_ffile: pd_ffile = {}
-            elif self.verb>0: print(f' > loaded model dict from .dct file')
+        # set logger
+        if self.model_FD and do_log: set_logger(
+            logFD=          self.model_FD,
+            custom_name=    mdict['name'],
+            verb=           self.verb)
 
-        self.mdict = ParaDict(fwdf_mdict)   # ParaDict with defaults of fwd_func
-        self.mdict.update(pd_ffile)         # update(override) with ParaDict from file
-        self.mdict.add_new(self_args_dict)  # add new from self_args_dict (extends)
-        self.mdict.update(mdict)            # update with mdict
-        self.mdict['name'] = resolved_name  # finally override name
+        self.mdict = ParaDict(fwdf_mdict)                       # ParaDict with defaults of fwd_func
+        self.mdict.add_new(self_args_dict)                      # add new from self_args_dict (extends)
+        self.mdict.update(FMDna.get_updated_dna(self, mdict))   # update(override) with ParaDict from file updated with mdict
         if do_opt and not self.mdict['opt_class']: self.mdict['opt_class'] = tf.train.AdamOptimizer # default optimizer
-
         self.mdict.check_params_sim(SPEC_KEYS)  # safety check
         self.update(self.mdict)  # finally update self with all model building params
 
         # save ParaDict (in train mode)
-        if do_opt:
-            self.mdict.save(folder=self.model_FD, fn_pfx='mdict')
-            if self.verb > 0: print(' > ParaDict of NEModel saved')
+        if do_opt: FMDna.save_dna(self, self.mdict)
 
         devices = tf_devices(devices, verb=self.verb)
 
@@ -371,3 +371,28 @@ class NEModel(dict):
         if self.verb > 2: print(self)
 
     def __str__(self): return ParaDict.dict_2str(self)
+
+    # copies NEModel folder (dna & checkpoints)
+    @staticmethod
+    def copy_nemodel_FD(
+            name_S: str,
+            name_T: str,
+            folder_S: str = None,
+            folder_T: str = None):
+
+        FMDna.static_copy_dna(name_S, name_T, folder_S, folder_T, NEMODEL_DNA_PFX)
+        nm_SFD = f'{folder_S}/{name_S}'
+        ckptL = [cfd for cfd in os.listdir(nm_SFD) if os.path.isdir(os.path.join(nm_SFD, cfd))]
+        if 'opt_vars' in ckptL: ckptL.remove('opt_vars')
+        for ckpt in ckptL:
+            mrg_ckpts(
+                ckptA=          ckpt,
+                ckptA_FD=       nm_SFD,
+                ckptB=          None,
+                ckptB_FD=       None,
+                ckptM=          ckpt,
+                ckptM_FD=       f'{folder_T}/{name_T}',
+                replace_scope=  name_T)
+
+
+
