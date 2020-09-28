@@ -10,6 +10,7 @@ import numpy as np
 import tensorflow as tf
 
 from ptools.lipytools.little_methods import short_scin
+from ptools.mpython.mpdecor import proc_wait
 
 
 # default initializer for variables of graph
@@ -221,6 +222,7 @@ def log_checkpoint(ckpt_FD):
         print(f' > ({100*sh_size(shape)/tot_siz:4.1f}%) {var_name:{max_nm_len}s} {str(shape):{max_sh_len}s} {var.dtype}')
 
 # weighted merge of two checkpoints
+@proc_wait
 def mrg_ckpts(
         ckptA :str,                 # checkpoint A (folder name)
         ckptA_FD :str,              # root folder of cpktA (absolute or relative)
