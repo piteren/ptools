@@ -7,6 +7,7 @@
 """
 
 import numpy as np
+import os
 import tensorflow as tf
 
 from ptools.lipytools.little_methods import short_scin
@@ -332,3 +333,22 @@ class ZeroesProcessor:
                 self.summ_writer.add_summary(nane_summ, step)
 
         return rd
+
+# TensorBoard writer
+class TBwr:
+
+    def __init__(
+            self,
+            logdir: str,
+            flush_secs= 10):
+
+        if not os.path.isdir(logdir): os.mkdir(logdir)
+        self.sw = tf.summary.FileWriter(logdir=logdir, flush_secs=flush_secs)
+
+    def add(self,
+            val,
+            name,
+            step):
+
+        sv = tf.Summary(value=[tf.Summary.Value(tag=name, simple_value=val)])
+        self.sw.add_summary(sv, step)
