@@ -54,7 +54,7 @@ from ptools.neuralmess.multi_saver import MultiSaver
 SPEC_KEYS = [
     'name',                                             # model name
     'seed',                                             # seed for TF nad numpy
-    'iLR',                                              # initial learning rate
+    'iLR',                                              # initial learning rate (base)
     'warm_up','ann_base','ann_step','n_wup_off',        # LR management (parameters of LR warmup and annealing)
     'avt_SVal','avt_window','avt_max_upd','do_clip',    # gradients clipping parameters
     'train_vars',                                       # list of variables to train (may be returned, otherwise all trainable are taken)
@@ -140,15 +140,15 @@ class NEModel(dict, FMDna):
             custom_name=    mdict['name'],
             verb=           self.verb)
 
-        self.mdict = ParaDict(fwdf_mdict)                       # ParaDict with defaults of fwd_func
-        self.mdict.add_new(self_args_dict)                      # add new from self_args_dict (extends)
-        self.mdict.update(FMDna.get_updated_dna(self, mdict))   # update(override) with ParaDict from file updated with mdict
-        if do_opt and not self.mdict['opt_class']: self.mdict['opt_class'] = tf.train.AdamOptimizer # default optimizer
-        self.mdict.check_params_sim(SPEC_KEYS)  # safety check
-        self.update(self.mdict)  # finally update self with all model building params
+        md = ParaDict(fwdf_mdict)                       # ParaDict with defaults of fwd_func
+        md.add_new(self_args_dict)                      # add new from self_args_dict (extends)
+        md.update(FMDna.get_updated_dna(self, mdict))   # update(override) with ParaDict from file updated with mdict
+        if do_opt and not md['opt_class']: md['opt_class'] = tf.train.AdamOptimizer # default optimizer
+        md.check_params_sim(SPEC_KEYS)                  # safety check
+        self.update(md)                                 # finally update self with all model building params
 
         # save ParaDict (in train mode)
-        if do_opt: FMDna.save_dna(self, self.mdict)
+        if do_opt: FMDna.save_dna(self, md)
 
         devices = tf_devices(devices, verb=self.verb)
 
@@ -313,8 +313,15 @@ class NEModel(dict, FMDna):
                             initializer=    tf.constant_initializer(0),
                             dtype=          tf.int32)
 
+                        self['iLR_var'] = tf.get_variable(  # base LR variable
+                            name=           'iLR',
+                            shape=          [],
+                            trainable=      False,
+                            initializer=    tf.constant_initializer(self['iLR']),
+                            dtype=          tf.float32)
+
                         self['scaled_LR'] = lr_scaler(
-                            iLR=            self['iLR'],
+                            iLR=            self['iLR_var'],
                             g_step=         self['g_step'],
                             warm_up=        self['warm_up'],
                             ann_base=       self['ann_base'],
@@ -371,6 +378,12 @@ class NEModel(dict, FMDna):
         if self.verb > 2: print(self)
 
     def __str__(self): return ParaDict.dict_2str(self)
+
+    # updates base LR (iLR) - but not saves it to checkpoint
+    def update_LR(self, lr):
+        assert 'iLR_var' in self, 'Err: there is no LR variable in graph!'
+        self['iLR'] = lr
+        self.session.run(tf.assign(ref=self['iLR_var'], value=lr))
 
     # copies NEModel folder (dna & checkpoints)
     @staticmethod
