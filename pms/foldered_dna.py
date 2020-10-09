@@ -2,9 +2,12 @@
 
  2020 (c) piteren
 
- Folder Managed DNA - dna(dict or ParaDict) saved to a folder
+ Folder Managed DNA(ParaDict)
+    - saves DNA to a folder
+    - loads updated DNA from folder
 
 """
+
 import os
 
 from ptools.pms.paradict import ParaDict
@@ -15,12 +18,12 @@ class FMDna:
 
     def __init__(
             self,
-            topfolder: str,         # top folder for dna folder
+            top_FD: str,            # top folder for dna folder
             name: str,              # name of dna/folder
             fn_pfx: str=  'dna'):   # dna filename prefix
 
-        # full path to .dct file is f'{self._tf}/{self._nm}/{self._fn}.dct'
-        self._tf = topfolder
+        # full path to .dct file is f'{self._tf}/{self._nm}/{self._fpx}.dct'
+        self._tf = top_FD
         if self._tf and not os.path.isdir(self._tf): os.mkdir(self._tf)
         self._nm = name
         self._fpx = fn_pfx
@@ -35,17 +38,18 @@ class FMDna:
         if not dna: dna = ParaDict()
         return dna
 
+    # saves updated dna in a folder
     def save_dna(
             self,
             dna: dict) -> None:
 
+        self.get_updated_dna(dna)
         dna_FD = self.get_dna_FD()
         if dna_FD:
             if not os.path.isdir(dna_FD): os.mkdir(dna_FD)
-
             if type(dna) is not ParaDict: dna = ParaDict(dna)
             dna.save(folder=dna_FD, fn_pfx=self._fpx)
-        else: assert False, 'ERR: cannot save to no folder!'
+        else: assert False, 'ERR: cannot save to NO folder!'
 
     # returns updated dna
     def get_updated_dna(
@@ -56,13 +60,6 @@ class FMDna:
         dna_mrg.update(self._load_dna())    # update with dna from folder
         if dna: dna_mrg.update(dna)         # update with given dna
         return dna_mrg
-
-    # saves updated dna in a folder
-    def update_dna(
-            self,
-            dna: dict) -> None:
-        self.get_updated_dna(dna)
-        self.save_dna(dna)
 
     # copies dna to target folder
     def copy(
@@ -104,4 +101,5 @@ class FMDna:
         if 'name' in sdna: sdna['name'] = name_T # update name
         if not os.path.isdir(dmk_TFD): os.mkdir(dmk_TFD)
         sdna.save(folder=dmk_TFD, fn_pfx=fn_pfx)
+
 

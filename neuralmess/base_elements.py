@@ -226,15 +226,15 @@ def log_checkpoint(ckpt_FD):
 # weighted merge of two checkpoints
 @proc_wait
 def mrg_ckpts(
-        ckptA :str,                 # checkpoint A (folder name)
-        ckptA_FD :str,              # root folder of cpktA (absolute or relative)
-        ckptB :str or None,         # checkpoint B (folder name), for None takes 100% ckptA
-        ckptB_FD :str or None,      # root folder of cpktB (absolute or relative)
-        ckptM :str,                 # checkpoint merged (folder name)
-        ckptM_FD :str,              # root folder of cpktM (absolute or relative)
-        mrgF :float=        0.5,    # merge factor
-        noiseF :float=      0.0,    # noise factor, amount of noise added to nev value (0.0-1.0...)
-        replace_scope :str= None,   # replaces outer scope with given string
+        ckptA: str,                 # checkpoint A (folder name)
+        ckptA_FD: str,              # root folder of cpktA (absolute or relative)
+        ckptB: str or None,         # checkpoint B (folder name), for None takes 100% ckptA
+        ckptB_FD: str or None,      # root folder of cpktB (absolute or relative)
+        ckptM: str,                 # checkpoint merged (folder name)
+        ckptM_FD: str,              # root folder of cpktM (absolute or relative)
+        mrgF: float=        0.5,    # merge factor (weight)
+        noiseF: float=      0.0,    # noise factor, amount of noise added to new value (0.0-1.0...)
+        replace_scope: str= None,   # replaces outer scope with given string
         verb=               0):
 
     if ckptA_FD[-1] != '/': ckptA_FD += '/'
@@ -268,7 +268,7 @@ def mrg_ckpts(
                 var = tf.contrib.framework.load_variable(f'{ckptB_FD}{ckptB}', var_name)
                 bvL.append(tf.Variable(var, name=var_name))
 
-    fin_vars = []
+    cvL = []
     for ix in range(len(var_namesA)):
         var_name = var_namesA[ix]
         if verb>0: print(f'old var_name: {var_name}')
@@ -277,22 +277,24 @@ def mrg_ckpts(
         varA = avL[ix]
         if bvL and varA.dtype == 'float32':
             varB = bvL[ix]
-            noise = tf.random.truncated_normal(
+            noise = tf.random.truncated_normal( # random values from a normal distribution truncated by 2stddev
                 shape=  varA.shape,
-                stddev= tf.math.reduce_std(varA))
+                stddev= tf.math.reduce_std(varA)) # stddev of varA
             var = tf.Variable(mrgF*varA + (1-mrgF)*varB + noiseF*noise, name=var_name)
         else:
             var = tf.Variable(varA, name=var_name)
-        fin_vars.append(var)
+        cvL.append(var)
 
     # save
     if verb>0: print('\nWriting checkpoint... ', end='')
-    fin_saver = tf.train.Saver(fin_vars)
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    with tf.Session(config=config) as sess:
+    child_saver = tf.train.Saver(cvL)
+    #config = tf.ConfigProto()
+    #config.gpu_options.allow_growth = True
+    with tf.Session(
+            #config=config
+            ) as sess:
         sess.run(tf.global_variables_initializer())
-        fin_saver.save(sess, f'{ckptM_FD}{ckptM}/{ckptM}', write_meta_graph=False)
+        child_saver.save(sess, f'{ckptM_FD}{ckptM}/{ckptM}', write_meta_graph=False)
     tf.reset_default_graph()
     if verb>0: print('done!')
 

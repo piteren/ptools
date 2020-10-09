@@ -43,7 +43,7 @@ import tensorflow as tf
 
 from ptools.lipytools.logger import set_logger
 from ptools.lipytools.little_methods import get_defaults, short_scin, stamp
-from ptools.lipytools.foldered_dna import FMDna
+from ptools.pms.foldered_dna import FMDna
 from ptools.pms.paradict import ParaDict
 from ptools.neuralmess.base_elements import num_var_floats, lr_scaler, gc_loss_reductor, log_vars, mrg_ckpts
 from ptools.neuralmess.dev_manager import tf_devices
@@ -129,7 +129,7 @@ class NEModel(dict, FMDna):
 
         FMDna.__init__(
             self,
-            topfolder=  save_TFD,
+            top_FD=     save_TFD,
             name=       mdict['name'],
             fn_pfx=     NEMODEL_DNA_PFX)
         self.model_FD = FMDna.get_dna_FD(self)
