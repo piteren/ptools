@@ -32,22 +32,24 @@ class GXRng(dict):
                 ls = kwargs[k]
                 assert len(ls)==2
                 av, bv = (ls[0],ls[1]) if ls[0]<ls[1] else (ls[1],ls[0])
-                assert av in [int, float]
-                assert bv in [int, float]
+                assert type(av) in [int, float]
+                assert type(bv) in [int, float]
                 if type(av) is float or type(bv) is float:
                     av = float(av)
                     bv = float(bv)
                 self[k] = [av,bv]
             else: self[k] = deepcopy(kwargs[k])
 
-    # moves ints and floats into defined range
+    # moves ints and floats into defined type & range
     def __move_val_into_range(
             self,
             key,
-            val):
+            val,
+            allow_growth=   False):
         if type(self[key][0]) is int: val = int(val)
-        if val < self[key][0]: val = self[key][0]
-        if val > self[key][1]: val = self[key][1]
+        if not allow_growth:
+            if val < self[key][0]: val = self[key][0]
+            if val > self[key][1]: val = self[key][1]
         return val
 
     # returns child value
@@ -56,9 +58,10 @@ class GXRng(dict):
             key,
             pa_val,
             pb_val,
-            mix_prob=   0.5,    # mix: for floats - avg, for int - takes int(avg), for tuples - random; no mix takes one parent value
-            noise_prob= 0.05,   # adds noise to float or int value
-            noise_rng=  0.05):  # noise range
+            mix_prob=       0.5,    # mix: for floats - avg, for int - takes int(avg), for tuples - random; no mix takes one parent value
+            noise_prob=     0.05,   # adds noise to float or int value
+            noise_rng=      0.05,   # noise range
+            allow_growth=   False):
 
         # mix or random_select
         if random.random() < mix_prob:
@@ -75,7 +78,7 @@ class GXRng(dict):
             if random.random() < 0.5: noise_val *= -1
             val += noise_val
 
-        if type(self[key]) is list: val = self.__move_val_into_range(key,val)
+        if type(self[key]) is list: val = self.__move_val_into_range(key,val,allow_growth=allow_growth)
 
         return val
 
@@ -110,14 +113,12 @@ def gx(
         name=   name_A,
         fn_pfx= fn_pfx)
     pa_dna = pa_fdna.get_updated_dna()
-    pa_dna = {k: pa_dna[k] for k in gxr}
 
     pb_fdna = FMDna(
         top_FD= top_FD,
         name=   name_B,
         fn_pfx= fn_pfx)
     pb_dna = pb_fdna.get_updated_dna()
-    pb_dna = {k: pb_dna[k] for k in gxr}
 
     # mix parents dna
     pc_dna = {key: gxr.get_child_val(
@@ -127,6 +128,10 @@ def gx(
         mix_prob=   mix_prob,
         noise_prob= noise_prob,  # adds noise to float or int value
         noise_rng=  noise_rng) for key in gxr}
+    # add rest of keys
+    for k in pa_dna:
+        if k not in gxr:
+            pc_dna[k] = pa_dna[k]
 
     cfmd = FMDna(
         top_FD= top_FD,

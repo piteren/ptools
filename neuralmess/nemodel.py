@@ -368,6 +368,7 @@ class NEModel(dict, FMDna):
         if load_saver:
             if type(load_saver) is bool: load_saver=None
             self.saver.load(saver=load_saver)
+            self.update_LR(self['iLR']) # safety update of iLR
 
         self.summ_writer = tf.summary.FileWriter(
             logdir=         self.model_FD,
@@ -379,11 +380,12 @@ class NEModel(dict, FMDna):
 
     def __str__(self): return ParaDict.dict_2str(self)
 
-    # updates base LR (iLR) - but not saves it to checkpoint
+    # updates base LR (iLR) in graph - but not saves it to checkpoint
     def update_LR(self, lr):
-        assert 'iLR_var' in self, 'Err: there is no LR variable in graph!'
-        self['iLR'] = lr
-        self.session.run(tf.assign(ref=self['iLR_var'], value=lr))
+        if 'iLR_var' not in self: print('NEModel: There is no LR variable in graph to update')
+        else:
+            self['iLR'] = lr
+            self.session.run(tf.assign(ref=self['iLR_var'], value=lr))
 
     # copies NEModel folder (dna & checkpoints)
     @staticmethod

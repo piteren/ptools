@@ -43,7 +43,7 @@ class FMDna:
             self,
             dna: dict) -> None:
 
-        self.get_updated_dna(dna)
+        dna = self.get_updated_dna(dna)
         dna_FD = self.get_dna_FD()
         if dna_FD:
             if not os.path.isdir(dna_FD): os.mkdir(dna_FD)
