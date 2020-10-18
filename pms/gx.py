@@ -26,7 +26,7 @@ class GXRng(dict):
 
         super().__init__()
 
-        for k in kwargs: assert type(kwargs[k]) in [list, tuple]
+        #for k in kwargs: assert type(kwargs[k]) in [list, tuple]
         for k in kwargs:
             if type(kwargs[k]) is list:
                 ls = kwargs[k]
@@ -63,33 +63,38 @@ class GXRng(dict):
             noise_rng=      0.05,   # noise range
             allow_growth=   False):
 
-        # mix or random_select
-        if random.random() < mix_prob:
-            if type(self[key]) is list:
-                val = pa_val + pb_val
-                val /= 2
-            else: val = random.choice(self[key])
-        else: val = pa_val if random.random()<0.5 else pb_val
+        if type(self[key]) not in [list, tuple]: return self[key]
+        else:
 
-        # add noise
-        if type(self[key]) is list and random.random()<noise_prob:
-            noise_rng = noise_rng * (self[key][1] - self[key][0])
-            noise_val = random.random() * noise_rng
-            if random.random() < 0.5: noise_val *= -1
-            val += noise_val
+            # mix or random_select
+            if random.random() < mix_prob:
+                if type(self[key]) is list:
+                    val = pa_val + pb_val
+                    val /= 2
+                else: val = random.choice(self[key])
+            else: val = pa_val if random.random()<0.5 else pb_val
 
-        if type(self[key]) is list: val = self.__move_val_into_range(key,val,allow_growth=allow_growth)
+            # add noise
+            if type(self[key]) is list and random.random()<noise_prob:
+                noise_rng = noise_rng * (self[key][1] - self[key][0])
+                noise_val = random.random() * noise_rng
+                if random.random() < 0.5: noise_val *= -1
+                val += noise_val
 
-        return val
+            if type(self[key]) is list: val = self.__move_val_into_range(key,val,allow_growth=allow_growth)
+
+            return val
 
     # returns dict of randomly sampled  value for each key
     def sample(self):
         sm = {}
         for k in self:
-            if type(self[k]) is tuple: val = random.choice(self[k])
-            else:
-                val = self[k][0] + random.random()*(self[k][1]-self[k][0])
-                val = self.__move_val_into_range(k,val)
+            if type(self[k]) in [list, tuple]:
+                if type(self[k]) is tuple: val = random.choice(self[k])
+                else:
+                    val = self[k][0] + random.random()*(self[k][1]-self[k][0])
+                    val = self.__move_val_into_range(k,val)
+            else: val = self[k]
             sm[k] = val
         return sm
 
