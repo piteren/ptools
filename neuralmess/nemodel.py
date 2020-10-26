@@ -85,8 +85,8 @@ class NEModel(dict):
             do_clip=                    False,
                 # save
             save_TFD :str=              '_models',  # top folder of model save
-            savers_names :tuple=        (None,),    # names of savers for MultiSaver
-            load_saver : bool or str=   True,       # for None do not loads, for True loads default
+            savers_names :tuple=        (None,),    # names of savers for MultiSaver # TODO: what does for << this default value?
+            load_saver : bool or str=   True,       # for None does not load, for True loads with default initializer
                 # GPU management
             sep_device=                 True,       # separate first device for variables, gradients_avg, optimizer (otherwise those ar placed on the first FWD calculations tower)
             collocate_GWO=              False,      # collocates gradient calculations with tf.OPs (gradients are calculated on every tower with its operations, but remember that vars are on one device...) (otherwise with first FWD calculations tower)
@@ -147,7 +147,7 @@ class NEModel(dict):
         self.update(self.mdict)  # finally update self with all model building params
 
         # save ParaDict (in train mode)
-        if do_opt:
+        if do_opt and self.model_FD:
             self.mdict.save(self.model_FD)
             if self.verb > 0: print(' > ParaDict of NEModel saved')
 
@@ -351,6 +351,7 @@ class NEModel(dict):
         sKeys = list(saver_vars.keys())
         for key in sKeys:
             if not saver_vars[key]: saver_vars.pop(key)
+        # TODO: saver_vars, savers_names, load_saver - need a little refactor!!!
         # add saver and load
         self.saver = MultiSaver(
             model_name= self['name'],

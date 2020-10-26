@@ -110,13 +110,12 @@ def enc_DRT(
     if verb > 0:
         drp = 0.0 if not dropout else dropout
         print(f'\nBuilding DRTencoder ({n_layers}x{lay_width} drop:{drp:.2f}) {lay_width_matched}...')
-    #if verb > 0: print('\nBuilding DRTencoder (%dx%d drop:%.2f) %s...' % (n_layers, lay_width, dropout, lay_width_matched))
 
     if initializer is None: initializer = my_initializer(seed)
 
     hist_summ = []
     hist_layers = list_of_layers(n_layers, n_select=n_hist)
-    if verb > 1: print(' > histogram layers of DRencoder:', hist_layers)
+    if verb > 1: print(' > histogram layers of DRTencoder:', hist_layers)
 
     zsL = [] # zeroes list
     with tf.variable_scope(name):

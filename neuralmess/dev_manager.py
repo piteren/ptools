@@ -23,7 +23,10 @@ def mask_cuda(ids :list or int= None):
     os.environ["CUDA_VISIBLE_DEVICES"] = mask
 
 # returns cuda memory size (system first device)
-def get_cuda_mem(): return GPUtil.getGPUs()[0].memoryTotal
+def get_cuda_mem():
+    devs = GPUtil.getGPUs()
+    if devs: return devs[0].memoryTotal
+    else: return 12000 # safety return for no cuda devices case
 
 # returns list of available GPUs ids
 def get_available_cuda_id(max_mem=None): # None sets automatic, otherwise (0,1.1] (above 1 for all)
@@ -121,3 +124,4 @@ def nestarter(
 if __name__ == '__main__':
 
     print(tf_devices([]))
+    print(get_cuda_mem())
