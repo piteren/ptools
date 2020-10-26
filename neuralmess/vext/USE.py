@@ -41,7 +41,7 @@ class UnSeEn:
             pack_auto = True
             dev_mem_size = get_cuda_mem()
             self.pack_size = int(7000 * dev_mem_size/11171) # automatic estimation based on Ti1080 experience with USE
-        if self.verb > 0: print(' > pack_size: %d (set auto: %s)'%(self.pack_size,pack_auto))
+        if self.verb > 0: print(f' > pack_size: {self.pack_size} (set auto: {pack_auto})')
 
         device = tf_devices(device, verb=verb)[0]
 
@@ -52,7 +52,7 @@ class UnSeEn:
         with self.graph.as_default():
             with tf.device(device):
                 modelV = UnSeEn.UM_002
-                if self.verb > 0: print(' > model: %s' % modelV)
+                if self.verb > 0: print(f' > model: {modelV}')
                 self.embedder = hub.Module(modelV)
                 self.session.run([tf.global_variables_initializer(), tf.tables_initializer()])
 
@@ -61,25 +61,25 @@ class UnSeEn:
     # returns list of embeddings(512) for list of sentences
     def make_emb(
             self,
-            textList :list):
+            text_L :list):
 
-        if self.verb > 0: print(' > embedding %d sentences in packs of %d' % (len(textList), self.pack_size))
+        if self.verb > 0: print(f' > embedding {len(text_L)} sentences in packs of {self.pack_size}')
 
-        subList = []
-        listOfSenList = []
-        for tx in textList:
-            if len(subList) < self.pack_size:
-                subList.append(tx)
+        # pack text_L into sub lists
+        sub_L = []
+        sub_LL = []
+        for tx in text_L:
+            if len(sub_L) < self.pack_size: sub_L.append(tx)
             else:
-                listOfSenList.append(subList)
-                subList = [tx]
-        listOfSenList.append(subList)
+                sub_LL.append(sub_L)
+                sub_L = [tx]
+        sub_LL.append(sub_L)
 
         emb_list = []
         with self.graph.as_default():
-            iterable = tqdm(listOfSenList) if self.verb > 0 else listOfSenList
-            for textL in iterable:
-                emb_sl = np.split(self.session.run(self.embedder(textL)),len(textL))
+            iterable = tqdm(sub_LL) if self.verb > 0 else sub_LL
+            for tl in iterable:
+                emb_sl = np.split(self.session.run(self.embedder(tl)), len(tl))
                 if self.to_float16: emb_sl = [np.squeeze(el).astype('float16') for el in emb_sl]
                 else:               emb_sl = [np.squeeze(el) for el in emb_sl]
                 emb_list += emb_sl
@@ -100,6 +100,6 @@ if __name__ == '__main__':
         '']
 
     emb = unseen.make_emb(sentences)
-    for e in emb: print(e)
+    for e in emb: print(len(e))
 
     unseen.close()

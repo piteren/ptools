@@ -9,6 +9,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 def fit_docs(
         docs :list,
         vectorizer=     None, # for given vectorizer uses its vocab and idf
+        ngram_range=    (1,1),
         tfidf_feats=    None,
         vocab=          None,
         verb=           0):
@@ -17,6 +18,7 @@ def fit_docs(
         # build vectorizer and fit
         vectorizer = TfidfVectorizer(
             use_idf=        True,
+            ngram_range=    ngram_range,
             max_features=   tfidf_feats,
             vocabulary=     vocab,
             stop_words=     'english')
