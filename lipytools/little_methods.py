@@ -75,28 +75,24 @@ def stamp(
         if True:    stp += ''.join([random.choice(string.ascii_letters) for _ in range(letters)])
     return stp
 
-# print nested dict
-def print_nested_dict(dc, ind=0):
+# prints nested dict
+def print_nested_dict(dc: dict, ind_scale=2):
 
-    # print obj with n indentation
-    def prnIND(
-            nInd,       # number of indentations
-            obj,        # object to print
-            indL=3):    # length of indentation
+    tpD = {
+        dict:   'D',
+        list:   'L',
+        tuple:  'T'}
 
-        tab = ''
-        tabInc = ''
-        for _ in range(indL): tabInc += ' '
-        for _ in range(nInd): tab += tabInc
-        print('%s%s' % (tab, obj))
+    def __prn_root(root: dict, ind, ind_scale=2):
+        spacer = ' ' * ind * ind_scale
+        for k in sorted(list(root.keys())):
+            tp = tpD.get(type(root[k]),'O')
+            ln = len(root[k]) if tp in tpD.values() else ''
+            print(f'{spacer}{k} [{tp}{ln}]')
+            if type(root[k]) is dict: __prn_root(root[k],ind+1,ind_scale)
 
-    if type(dc) is dict:
-        for key in sorted(list(dc.keys())):
-            prnIND(ind, '%s'%key)
-            print_nested_dict(dc[key], ind + 1)
-    else:
-        if type(dc) is list:    prnIND(ind, '%s...(len %d)'%(dc[0], len(dc)))
-        else:                   prnIND(ind, '%s'%dc)
+    __prn_root(dc,ind=0,ind_scale=ind_scale)
+
 
 # prepares folder, creates or flushes
 def prep_folder(
@@ -112,3 +108,13 @@ def prep_folder(
 
 if __name__ == '__main__':
     print(stamp())
+
+    dc = {
+        'a0': {
+            'a1': {
+                'a2': ['el1','el2']
+            }
+        },
+        'b0': ['el1','el2','el3']
+    }
+    print_nested_dict(dc)
