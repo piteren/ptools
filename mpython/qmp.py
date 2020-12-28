@@ -21,10 +21,10 @@ class InternalProcessor(Process):
 
     def __init__(
             self,
-            func :Callable,     # function to run
-            tq :Queue,
-            rq :Queue,
-            devices :list,
+            func: Callable,     # function to run
+            tq: Queue,
+            rq: Queue,
+            devices: list,
             sorted=     False):
 
         Process.__init__(self, target=self.__run)
@@ -122,9 +122,9 @@ class DeQueMP:
 
     def __init__(
             self,
-            func :Callable,                 # function to run
+            func: Callable,                 # function to run
             devices=                None,   # devices to use
-            use_cores :int or True= True,   # True: when devices is None >> uses all cores, otherwise as set by int or devices
+            use_cores: int or True= True,   # True: when devices is None >> uses all cores, otherwise as set by int or devices
             user_tasks=             False,  # user_tasks mode, in user_tasks mode user sends kwargs dicts (via put_task)
             rq_trg=                 500,    # r_que target size (if not user_tasks mode), won't grow above
             name=                   'dqmp',
