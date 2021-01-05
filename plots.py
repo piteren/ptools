@@ -35,8 +35,11 @@ def histogram(
     plt.hist(val_list, label=name, density=density, bins=bins, alpha=0.5)
     plt.legend(loc='upper right')
     plt.grid(True)
-    if save_FD: plt.savefig(f'{save_FD}/{name}.png')
-    else:       plt.show()
+    if save_FD:
+        if not os.path.isdir(save_FD): os.mkdir(save_FD)
+        plt.savefig(f'{save_FD}/{name}.png')
+    else:
+        plt.show()
 
 
 def two_dim(

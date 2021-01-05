@@ -43,7 +43,7 @@ def docs_stats(
         vals['n_chr_doc'].append(doc_chars)
 
     for k in vals:
-        print(f'stats for {k}:')
+        if print_pd: print(f'\n > {k} stats:')
         histogram(
             val_list=   vals[k],
             name=       k,
