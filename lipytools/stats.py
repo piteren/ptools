@@ -28,7 +28,8 @@ def msmx(val_list :list or np.array) -> dict:
 def stats_pd(
         val_list :list,
         n_percentiles=  10) -> str:
-    return f'{pd.Series(val_list).describe(percentiles=[0.1*n for n in range(1,n_percentiles)])}'
+    s = f'{pd.Series(val_list).describe(percentiles=[0.1*n for n in range(1,n_percentiles)])}'
+    return s[:s.rfind('\n')]
 
 # draws/saves histogram for list of values, print_pd option
 def histogram(

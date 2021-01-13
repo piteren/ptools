@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import pandas as pd
 import plotly.express as px
+from scipy import stats as scst
 import os
 
 from ptools.lipytools.stats import stats_pd, msmx
@@ -9,15 +10,15 @@ from ptools.lipytools.stats import stats_pd, msmx
 
 def histogram(
         val_list :list or np.array,
-        name=           'values',
-        rem_nstd :int=  0,      # removes values out of N*STD
-        print_pd=       True,
-        density=        True,
-        bins=           20,
-        save_FD :str=   None):
+        name=               'values',
+        rem_nstd :int=      0,      # removes values out of N*stddev
+        print_pd=           True,
+        density=            True,
+        bins: int or None=  None, # automatic for None
+        save_FD :str=       None):
 
     if print_pd:
-        print(f'\nStats with pandas:')
+        print(f'\n > stats with pandas for "{name}":')
         print(stats_pd(val_list))
 
     if rem_nstd:
@@ -28,11 +29,17 @@ def histogram(
         val_list = [val for val in val_list if mean - n * std < val < mean + n * std]
 
         if print_pd:
-            print(f'\nStats after removing {rem_nstd} STD:')
+            print(f'\n > after removing {rem_nstd} stddev:')
             print(stats_pd(val_list))
 
+    if not bins:
+        bins = len(set(val_list))
+        if bins>50: bins = 50
+
     plt.clf()
-    plt.hist(val_list, label=name, density=density, bins=bins, alpha=0.5)
+    n, x, _ = plt.hist(val_list, label=name, density=density, bins=bins, alpha=0.5)
+    density = scst.gaussian_kde(val_list)
+    plt.plot(x, density(x))
     plt.legend(loc='upper right')
     plt.grid(True)
     if save_FD:
