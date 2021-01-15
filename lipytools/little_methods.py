@@ -47,7 +47,6 @@ def short_scin(
 def r_pickle(
         pickleFP,       # pickle full path
         oType=None):    # if given checks for compatibility with given type
-
     obj = None
     if os.path.isfile(pickleFP):
         obj = pickle.load(open(pickleFP, 'rb'))
@@ -58,7 +57,6 @@ def r_pickle(
 def w_pickle(
         obj,
         pickleFP):      # pickle full path
-
     pickle.dump(obj, open(pickleFP, 'wb'))
 
 # returns timestamp string

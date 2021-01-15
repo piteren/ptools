@@ -38,8 +38,9 @@ def histogram(
 
     plt.clf()
     n, x, _ = plt.hist(val_list, label=name, density=density, bins=bins, alpha=0.5)
-    density = scst.gaussian_kde(val_list)
-    plt.plot(x, density(x))
+    if len(val_list)>1:
+        density = scst.gaussian_kde(val_list)
+        plt.plot(x, density(x))
     plt.legend(loc='upper right')
     plt.grid(True)
     if save_FD:
