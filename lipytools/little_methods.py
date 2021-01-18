@@ -86,7 +86,8 @@ def print_nested_dict(dc: dict, ind_scale=2):
         for k in sorted(list(root.keys())):
             tp = tpD.get(type(root[k]),'O')
             ln = len(root[k]) if tp in tpD.values() else ''
-            print(f'{spacer}{k} [{tp}{ln}]')
+            lst = f' : {str(root[k])}' if tp=='L' else ''
+            print(f'{spacer}{k} [{tp}{ln}]{lst}')
             if type(root[k]) is dict: __prn_root(root[k],ind+1,ind_scale)
 
     __prn_root(dc,ind=0,ind_scale=ind_scale)
