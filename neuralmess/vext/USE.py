@@ -13,7 +13,8 @@ import tensorflow_hub as hub
 import tf_sentencepiece
 from tqdm import tqdm
 
-from putils.neuralmess.dev_manager import get_cuda_mem, tf_devices
+from ptools.neuralmess.dev_manager import get_cuda_mem, tf_devices
+
 
 # Universal Sentence Encoder
 class UnSeEn:

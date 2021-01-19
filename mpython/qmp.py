@@ -16,109 +16,109 @@ from ptools.mpython.mpdecor import proc_que
 from ptools.lipytools.little_methods import short_scin
 
 
-# internal processor for DeQueMP
-class InternalProcessor(Process):
+# que multi processor (decorated)
+class DeQueMP:
 
-    def __init__(
-            self,
-            func: Callable,     # function to run
-            tq: Queue,
-            rq: Queue,
-            devices: list,
-            sorted=     False):
+    # internal processor for DeQueMP
+    class InternalProcessor(Process):
 
-        Process.__init__(self, target=self.__run)
+        def __init__(
+                self,
+                func: Callable,     # function to run
+                tq: Queue,
+                rq: Queue,
+                devices: list,
+                sorted=     False):
 
-        self.func = func
-        ins = getfullargspec(self.func)
-        self.device_for_func = False
-        if 'device' in ins.args: self.device_for_func = 'device'
-        if 'devices' in ins.args: self.device_for_func = 'devices'
+            Process.__init__(self, target=self.__run)
 
-        self.tq = tq
-        self.rq = rq
-        self.devices = devices
-        self.n_devices = len(self.devices)
-        self.inq = Queue() # internal que for subprocesses
+            self.func = func
+            ins = getfullargspec(self.func)
+            self.device_for_func = False
+            if 'device' in ins.args: self.device_for_func = 'device'
+            if 'devices' in ins.args: self.device_for_func = 'devices'
 
-        self.sorted = sorted
+            self.tq = tq
+            self.rq = rq
+            self.devices = devices
+            self.n_devices = len(self.devices)
+            self.inq = Queue() # internal que for subprocesses
 
-    # wraps func
-    def __proc_task(self, task, taskIX, device):
+            self.sorted = sorted
 
-        @proc_que(self.inq)
-        def wrap(task, taskIX, device):
-            if self.device_for_func: task[self.device_for_func] = device
-            res = self.func(**task)
-            return {
-                'res':      res,
-                'taskIX':   taskIX,
-                'device':   device}
+        # wraps func
+        def __proc_task(self, task, taskIX, device):
 
-        wrap(task, taskIX, device)
+            @proc_que(self.inq)
+            def wrap(task, taskIX, device):
+                if self.device_for_func: task[self.device_for_func] = device
+                res = self.func(**task)
+                return {
+                    'res':      res,
+                    'taskIX':   taskIX,
+                    'device':   device}
 
-    # process loop
-    def __run(self):
+            wrap(task, taskIX, device)
 
-        task_counter = 0
-        last_processed_task_IX = -1
-        res_cache = {}
-        while True:
+        # process loop
+        def __run(self):
 
-            #print(f'D:{len(self.devices)} T:{self.tq.qsize()} R:{self.inq.qsize()}')
+            task_counter = 0
+            last_processed_task_IX = -1
+            res_cache = {}
+            while True:
 
-            if self.devices:
+                #print(f'D:{len(self.devices)} T:{self.tq.qsize()} R:{self.inq.qsize()}')
 
-                # try get task
-                task = None
-                try: task = self.tq.get_nowait()
+                if self.devices:
+
+                    # try get task
+                    task = None
+                    try: task = self.tq.get_nowait()
+                    except Empty: pass
+
+                    # poison case / exit loop
+                    if task == 'poison':
+                        while len(self.devices) < self.n_devices: self.devices.append(self.inq.get()['device'])
+                        self.rq.put('finished')
+                        break
+
+                    # process task
+                    if task is not None:
+                        device = self.devices.pop(0)
+                        taskIX = task_counter
+                        self.__proc_task(task, taskIX, device)
+
+                        task_counter += 1
+
+                # look for ready result
+                result = None
+                try: result = self.inq.get_nowait()
                 except Empty: pass
 
-                # poison case / exit loop
-                if task == 'poison':
-                    while len(self.devices) < self.n_devices: self.devices.append(self.inq.get()['device'])
-                    self.rq.put('finished')
-                    break
+                if not self.devices and result is None: result = self.inq.get() # have to wait for result now
 
-                # process task
-                if task is not None:
-                    device = self.devices.pop(0)
-                    taskIX = task_counter
-                    self.__proc_task(task, taskIX, device)
+                # process result
+                if result is not None:
 
-                    task_counter += 1
+                    res =    result['res']
+                    taskIX = result['taskIX']
+                    self.devices.append(result['device'])
 
-            # look for ready result
-            result = None
-            try: result = self.inq.get_nowait()
-            except Empty: pass
-
-            if not self.devices and result is None: result = self.inq.get() # have to wait for result now
-
-            # process result
-            if result is not None:
-
-                res =    result['res']
-                taskIX = result['taskIX']
-                self.devices.append(result['device'])
-
-                if self.sorted:
-                    # got res in order
-                    if last_processed_task_IX + 1 == taskIX:
-                        last_processed_task_IX += 1
-                        self.rq.put(res)
-
-                        # take from cache
-                        while last_processed_task_IX + 1 in res_cache:
+                    if self.sorted:
+                        # got res in order
+                        if last_processed_task_IX + 1 == taskIX:
                             last_processed_task_IX += 1
-                            self.rq.put(res_cache.pop(last_processed_task_IX))
+                            self.rq.put(res)
 
-                    else: res_cache[taskIX] = res # put to cache
+                            # take from cache
+                            while last_processed_task_IX + 1 in res_cache:
+                                last_processed_task_IX += 1
+                                self.rq.put(res_cache.pop(last_processed_task_IX))
 
-                else: self.rq.put(res)
+                        else: res_cache[taskIX] = res # put to cache
 
-# decorated que multi processor
-class DeQueMP:
+                    else: self.rq.put(res)
 
     def __init__(
             self,
@@ -145,7 +145,7 @@ class DeQueMP:
         self.tq = Queue()
         self.rq = Queue()
 
-        self.ip = InternalProcessor(
+        self.ip = DeQueMP.InternalProcessor(
             func=       func,
             tq=         self.tq,
             rq=         self.rq,

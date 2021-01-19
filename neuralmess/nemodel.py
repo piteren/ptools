@@ -5,9 +5,9 @@
  NEModel class: wraps graph building function (fwd_func) with many features
 
     fwd_func:
-        - should be build complete model forward graph (FWD) - from PH (placeholders) to loss
+        - should build complete model forward graph (FWD) - from PH (placeholders) to loss
         - function should return dict with PH, tensors, variables lists, dict keys should meet naming policy
-            - if there is a 'loss' tensor returned >> OPT part may be build
+            - if there is a "loss" tensor returned >> OPT part may be build
             - dict may contain variables_lists and single variable under keys with 'var' in name
                 - list of special keys to consider while building fwd_func is under SPEC_KEYS
                 - variables returned under 'train_vars' key are optimized (if 'train_vars' key is not present all trainable vars are optimized)
@@ -15,12 +15,12 @@
 
     Model building params and their arguments (p&a) may come from (in order of overriding):
         - NEModel __init__ p&a
-        - mdict.dct p&a (when saved in model folder)
+        - mdict.dct p&a (when saved in model folder)
         - fwd_func p&a (defaults)
         - mdict (for fwd_func, given to NEModel init)
 
-    - keeps updated model_building_params under self (dict) keys
-    - tensors, placeholders, etc... returned by model function are also kept under self (dict) keys
+    - keeps updated model_building_params in self (dict) keys
+    - tensors, placeholders, etc... returned by model function are also kept in self (dict) keys
     - model objects (graph, session, saver ...) are kept as self fields
 
  NEModel class implements:

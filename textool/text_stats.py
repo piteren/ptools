@@ -4,7 +4,7 @@
 
 """
 
-from ptools.plots import histogram
+from ptools.lipytools.plots import histogram
 
 
 def docs_stats(

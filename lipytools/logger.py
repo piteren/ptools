@@ -8,6 +8,7 @@ import os
 import sys
 import time
 
+
 # logger duplicating print() output to given file
 class Logger:
 

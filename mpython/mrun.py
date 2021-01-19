@@ -4,6 +4,9 @@
 
     mrun - multi run function
 
+    runs func (in parallel) with given kwargsL (list of dicts/kwargs for func)
+    using given devices (CPUs or GPUs)
+
 """
 
 from inspect import getfullargspec
@@ -22,7 +25,7 @@ from ptools.mpython.mpdecor import proc_que
 def mrun(
         func :Callable,             # function to run
         kwargsL :List[dict],        # list of function kwargs (dicts) for runs
-        devices=            None,   # devices to use for search
+        devices=            None,   # devices to use for func
         use_all_cores=      True,   # True: when devices is None >> uses all cores, otherwise as set by devices
         subprocess=         True,   # True: runs func in subprocesses, otherwise in this process
         verb=               1):

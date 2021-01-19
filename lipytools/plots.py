@@ -1,9 +1,9 @@
-import numpy as np
 from matplotlib import pyplot as plt
+import numpy as np
+import os
 import pandas as pd
 import plotly.express as px
 from scipy import stats as scst
-import os
 
 from ptools.lipytools.stats import stats_pd, msmx
 

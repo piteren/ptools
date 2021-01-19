@@ -283,7 +283,17 @@ class PaSpa:
         return info[:-1]
 
 
-def example_paspa(dc):
+def example_paspa1():
+
+    dc = {
+        'a':    (True, False, None),
+        'b':    (-1, -7, 10, 15.5, 90, 30),
+        'c':    ('tat', 'mam', 'kot'),
+        'd':    (0, 1, 2, 3, None),
+        'e':    (-2.0, 2, None),
+        'f':    [-3, 3.0],
+        'g':    (-3, 3),
+        'h':    (-3, None, 3)}
 
     paspa = PaSpa(dc)
 
@@ -312,23 +322,8 @@ def example_paspa(dc):
         point_b = paspa.sample_point()
         print(f'distance {paspa.dist(point_a, point_b):.3f} between:\n {paspa.point_2str(point_a)}\n {paspa.point_2str(point_b)}')
 
-
-if __name__ == '__main__':
-
-    """
-    rgs = {
-        'a':    (True, False, None),
-        'b':    (-1, -7, 10, 15.5, 90, 30),
-        'c':    ('tat', 'mam', 'kot'),
-        'd':    (0, 1, 2, 3, None),
-        'e':    (-2.0, 2, None),
-        'f':    [-3, 3.0],
-        'g':    (-3, 3),
-        'h':    (-3, None, 3)
-    }
-
-    example_paspa(rgs)
-    """
+# samples close points
+def example_paspa2():
 
     psd = {
         'pe_width':             [0,5],
@@ -354,16 +349,21 @@ if __name__ == '__main__':
     paspa = PaSpa(psd)
     print(paspa)
 
-
-
     ref_pt = paspa.sample_point()
-    ld = 0
-    nref_pt  =ref_pt
-    while ld < 1:
-        nref_pt = paspa.sample_point(ref_point=ref_pt,ax_dst=0.1)
-        if nref_pt['ldrt_drop'] > 1: print('dupex')
-        if nref_pt['ldrt_drop'] < ref_pt['ldrt_drop']:
+    ld = 1
+    while ld > 0:
+        nref_pt = paspa.sample_point(ref_point=ref_pt, ax_dst=0.1)
+        ld = nref_pt['ldrt_drop']
+        if ld > 1:
+            print('error')
+            break
+        if ld < ref_pt['ldrt_drop']:
             ref_pt = nref_pt
             print(ref_pt['ldrt_drop'])
     print(ref_pt)
 
+
+if __name__ == '__main__':
+
+    example_paspa1()
+    #example_paspa2()

@@ -9,7 +9,7 @@
 from inspect import getfullargspec
 import time
 
-# decorator printing time report
+# decorator printing execution time report
 def timing(f):
     def new_f(*args, **kwargs):
         stime = time.time()

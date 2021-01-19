@@ -13,6 +13,7 @@ import warnings
 
 from ptools.lipytools.logger import set_logger
 
+
 # masks GPUs from given list of ids or single one
 def mask_cuda(ids :list or int= None):
     if ids is None: ids = []
@@ -43,7 +44,6 @@ def report_cuda():
 def tf_devices(
         devices :list or int or None=   -1,
         verb=                           1) -> List[str]:
-
     """
     devices may be given as:
         1.  int         one (system) cuda id
@@ -54,7 +54,7 @@ def tf_devices(
         6.  str         device in TF format (e.g. '/device:GPU:0')
         7.  [str]       list of devices in TF format
 
-    for 1-5 masks cuda devices
+    1-5 masks cuda devices
     for OSX returns CPU only
     """
     if platform.system() == 'Darwin' or not GPUtil.getGPUs():

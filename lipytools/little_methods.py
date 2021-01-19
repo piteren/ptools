@@ -30,11 +30,10 @@ def get_defaults(function):
                 arg_dict[args[ix]] = vals[ix]
     return arg_dict
 
-# short scientific notation of floats
+# short(compressed) scientific notation for floats
 def short_scin(
         fl,
         precise=    False):
-
     sh = '%.1E' % float(fl) if not precise else '%.3E' % float(fl)
     sh = sh.replace('+0','')
     sh = sh.replace('+','')
@@ -42,7 +41,6 @@ def short_scin(
     sh = sh.replace('E','e')
     return sh
 
-# returns object from given pickleFileName
 # returns None if file not exists
 def r_pickle(
         pickleFP,       # pickle full path
@@ -103,7 +101,6 @@ def prep_folder(
     elif flush_non_empty:
         shutil.rmtree(folder_path)
         prep_folder(folder_path)
-
 
 
 if __name__ == '__main__':
