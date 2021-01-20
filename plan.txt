@@ -1,0 +1,17 @@
+code style
+    - PEP8: https://www.python.org/dev/peps/pep-0008/
+    *this style guide evolves over time as additional conventions are identified and past conventions are rendered obsolete
+    *many projects have their own coding style guidelines
+    *to improve the readability of code
+
+    - indentations
+    - max line length
+
+    naming conventions
+    *naming conventions of Python's library are a bit of a mess, so we'll never get this completely consistent
+    - acronyms
+
+code evolution & backward compatibility
+- new defaults
+
+examples in main

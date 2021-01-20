@@ -1,0 +1,16 @@
+def connect_to_next_port(self, minimum):
+    """Connects to the next available port.
+
+    Args:
+      minimum: A port value greater or equal to 1024.
+
+    Returns:
+      The new minimum port.
+
+    Raises:
+      ConnectionError: If no available port is found.
+    """
+
+
+from . import sibling
+from .sibling import example
