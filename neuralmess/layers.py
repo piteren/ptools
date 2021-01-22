@@ -5,10 +5,11 @@
 """
 
 import numpy as np
-import tensorflow as tf
 from typing import List
 
+from ptools.neuralmess.get_tf import tf
 from ptools.neuralmess.base_elements import my_initializer, flatten_LOTens
+
 
 # residual (advanced) connection for (any) layer
 def lay_res(

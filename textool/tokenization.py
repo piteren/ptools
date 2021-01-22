@@ -8,7 +8,6 @@ import nltk
 import spacy
 import string
 
-SPACY_EN_NLP = spacy.load('en_core_web_sm')
 
 # separates punctuation with spaces
 def pretokenize_punct(text):
@@ -30,13 +29,13 @@ def whitspace_normalize(text):
     return ' '.join(text_list)
 
 # spacy word tokenizer
-def spacy_Wtokenizer(text):
-    tokens = SPACY_EN_NLP.tokenizer(text)
+def spacy_Wtokenizer(text, nlp: spacy.component):
+    tokens = nlp.tokenizer(text)
     return [w.text for w in tokens]
 
 # spacy sentence tokenizer
-def spacy_Stokenizer(text):
-    tokens = SPACY_EN_NLP(text).sents
+def spacy_Stokenizer(text, nlp: spacy.component):
+    tokens = nlp(text).sents
     return [s.text for s in tokens]
 
 # word tokenization method, supports 'spacy', 'nltk', for other 'space'

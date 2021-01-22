@@ -5,12 +5,12 @@
 """
 
 import GPUtil
-import platform
 import os
-import tensorflow as tf
+import platform
 from typing import List
 import warnings
 
+from ptools.neuralmess.get_tf import tf
 from ptools.lipytools.logger import set_logger
 
 

@@ -7,8 +7,8 @@
 """
 
 import numpy as np
-import tensorflow as tf
 
+from ptools.neuralmess.get_tf import tf
 from ptools.lipytools.little_methods import short_scin
 
 

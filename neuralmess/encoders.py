@@ -6,8 +6,7 @@
 
 """
 
-import tensorflow as tf
-
+from ptools.neuralmess.get_tf import tf
 from ptools.neuralmess.base_elements import my_initializer, list_of_layers
 from ptools.neuralmess.layers import lay_res, zeroes, lay_dense, lay_conv1D, attn
 
@@ -228,10 +227,13 @@ def enc_CNN(
                 if hist_lay: hist_summ.append(tf.summary.histogram('a_lay_in', lay_input, family=name))
 
                 # LN
+                lay_input = tf.keras.layers.LayerNormalization(axis=-1)(lay_input)
+                """
                 lay_input = tf.contrib.layers.layer_norm(
                     inputs=             lay_input,
                     begin_norm_axis=    -1,
                     begin_params_axis=  -1)
+                """
                 if hist_lay: hist_summ.append(tf.summary.histogram('b_LN', lay_input, family=name))
 
                 # conv no activation
@@ -286,10 +288,13 @@ def enc_CNN(
                 sub_output = output
 
     # final LN
+    output = tf.keras.layers.LayerNormalization(axis=-1)(output)
+    """
     output = tf.contrib.layers.layer_norm(
         inputs=             output,
         begin_norm_axis=    -1,
         begin_params_axis=  -1)
+    """
 
     # prepare fin_state
     fin_state = None

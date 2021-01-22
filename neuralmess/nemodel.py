@@ -38,11 +38,11 @@
 
 import numpy as np
 import os
-import tensorflow as tf
 
 from ptools.lipytools.logger import set_logger
 from ptools.lipytools.little_methods import get_defaults, short_scin, stamp
 from ptools.pms.paradict import ParaDict
+from ptools.neuralmess.get_tf import tf
 from ptools.neuralmess.base_elements import num_var_floats, lr_scaler, gc_loss_reductor, log_vars
 from ptools.neuralmess.dev_manager import tf_devices
 from ptools.neuralmess.multi_saver import MultiSaver
