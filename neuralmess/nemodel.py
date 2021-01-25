@@ -144,7 +144,7 @@ class NEModel(dict):
         # save ParaDict (in train mode)
         if do_opt:
             self.mdict.save(self.model_FD)
-            if self.verb > 0: print(' > ParaDict of %s NEModel saved')
+            if self.verb > 0: print(f' > ParaDict of {self["name"]} NEModel saved')
 
         devices = tf_devices(devices, verb=self.verb)
 
@@ -152,9 +152,9 @@ class NEModel(dict):
         if self.verb > 0:
             print()
             if len(devices)==1:
-                if 'CPU' in devices[0]: print('NEModel builds CPU device setup')
-                else:                   print('NEModel builds single-GPU setup')
-            else:                       print('NEModel builds multi-dev setup for %d devices'%len(devices))
+                if 'CPU' in devices[0]: print(f'NEModel builds CPU device setup')
+                else:                   print(f'NEModel builds single-GPU setup')
+            else:                       print(f'NEModel builds multi-dev setup for {len(devices)} devices')
 
         if len(devices)<3: sep_device = False # SEP is available for 3 or more devices
 
@@ -165,18 +165,18 @@ class NEModel(dict):
 
             tf.set_random_seed(self['seed']) # set graph seed
             np.random.seed(self['seed'])
-            if self.verb > 0: print('\nNEModel set TF & NP seed to %d' % self['seed'])
+            if self.verb > 0: print(f'\nNEModel set TF & NP seed to {self["seed"]}')
 
             # builds graph @SEP, this graph wont be run, it is only needed to place variables, if not vars_sep >> variables will be placed with first tower
             if sep_device:
-                if self.verb > 0: print('\nNEModel places %s VARs on %s...' % (self['name'], devices[0]))
+                if self.verb > 0: print(f'\nNEModel places {self["name"]} VARs on {devices[0]}...')
                 with tf.device(devices[0]):
                     fwd_func(**self)
 
             tower_devices = [] + devices
             if sep_device: tower_devices = tower_devices[1:] # trim SEP
             for dev in tower_devices:
-                if self.verb > 0: print('\nNEModel builds FWD graph of %s model @device: %s' % (self['name'], dev))
+                if self.verb > 0: print(f'\nNEModel builds FWD graph of {self["name"]} model @device: {dev}')
                 with tf.device(dev):
                     with tf.variable_scope('', reuse=tf.AUTO_REUSE):
                         self.gFWD.append(fwd_func(**self))
@@ -204,7 +204,7 @@ class NEModel(dict):
                 there_are_all = True
                 for var in all_vars:
                     if var not in all_vars_returned:
-                        print(' *** variable %s not returned by fwd_func'%var.name)
+                        print(f' *** variable {var.name} not returned by fwd_func')
                         there_are_all = False
                 assert there_are_all, 'ERR: there are some variables not returned by fwd_func in lists!'
 
@@ -214,7 +214,7 @@ class NEModel(dict):
                 print('\nNEModel variables to save from fwd_func:')
                 for key in sorted(list(saver_vars.keys())):
                     varList = saver_vars[key]
-                    if varList: print(' ### vars @%s - num: %d, floats: %s (%s)' % (key, len(varList), short_scin(num_var_floats(varList)), varList[0].device))
+                    if varList: print(f' ### vars @{key} - num: {len(varList)}, floats: {short_scin(num_var_floats(varList))} ({varList[0].device})')
                     else: print(' ### no vars')
                     if self.verb > 1: log_vars(varList)
 
@@ -226,14 +226,14 @@ class NEModel(dict):
                 if self.verb > 0: print('\nOPT graph wont be build')
             # build optimization graph
             else:
-                if self.verb > 0: print('\nPreparing OPT part with %s' % self['opt_class'])
+                if self.verb > 0: print(f'\nPreparing OPT part with {self["opt_class"]}')
                 # select trainable variables for OPT
                 all_tvars = tf.trainable_variables()
                 if train_vars:
                     # check if all train_vars are trainable:
                     for var in train_vars:
                         if var not in all_tvars:
-                            if self.verb > 0: print('variable %s is not trainable but is in train_vars, please check the graph!' % var.name)
+                            if self.verb > 0: print(f'variable {var.name} is not trainable but is in train_vars, please check the graph!')
                 else:
                     for key in saver_vars:
                         for var in saver_vars[key]:
@@ -243,7 +243,7 @@ class NEModel(dict):
                 # log train_vars
                 if self.verb > 0:
                     print('\nNEModel trainable variables:')
-                    print(' ### train_vars: %d floats: %s' % (len(train_vars), short_scin(num_var_floats(train_vars))))
+                    print(f' ### train_vars: {len(train_vars)} floats: {short_scin(num_var_floats(train_vars))}')
                     if self.verb > 1: log_vars(train_vars)
 
                 # build gradients for towers
@@ -253,17 +253,27 @@ class NEModel(dict):
                         ys=                             tower['loss'],
                         xs=                             train_vars,
                         colocate_gradients_with_ops=    not collocate_GWO) # TF default is False >> calculates gradients where OPS, for True >> where train_vars
+
                     # log gradients
                     if self.verb > 0:
                         nGrad = len(tower['gradients'])
-                        print(' > gradients for %d tower got %d tensors (%s)' %(ix,nGrad,tower['gradients'][0].device))
+
+                        # None_as_gradient case
+                        device = 'UNKNOWN'
+                        for t in tower['gradients']:
+                            if t is not None:
+                                device = t.device
+                                break
+
+                        print(f' > gradients for {ix} tower got {nGrad} tensors ({device})')
                         if self.verb > 1:
                             print('NEModel variables and their gradients:')
                             for gix in range(len(tower['gradients'])):
                                 grad = tower['gradients'][gix]
                                 var = train_vars[gix]
                                 print(var, var.device)
-                                print(' > %s'%grad) # grad as a tensor displays device when printed (unless colocated with OP!)
+                                print(f' > {grad}') # grad as a tensor displays device when printed (unless colocated with OP!)
+
                 self['gradients'] = self.gFWD[0]['gradients']
 
                 # None @gradients check
@@ -271,12 +281,12 @@ class NEModel(dict):
                 for grad in self['gradients']:
                     if grad is None: none_grads += 1
                 if none_grads and self.verb > 0:
-                    print('There are None gradients: %d/%d, some trainVars may be unrelated to loss, please check the graph!'%(none_grads,len(self['gradients'])))
+                    print(f'There are None gradients: {none_grads}/{len(self["gradients"])}, some trainVars may be unrelated to loss, please check the graph!')
 
                 # average gradients
                 if len(devices) > 1:
 
-                    if self.verb > 0: print('\nNEModel builds gradients averaging graph with device %s for %d towers' % (devices[0], len(self.gFWD)))
+                    if self.verb > 0: print(f'\nNEModel builds gradients averaging graph with device {devices[0]} for {len(self.gFWD)} towers')
                     with tf.device(devices[0]):
 
                         towerGrads = [tower['gradients'] for tower in self.gFWD]
@@ -294,12 +304,12 @@ class NEModel(dict):
                             else: avgGrads.append(None)
 
                         self['gradients'] = avgGrads # update with averaged gradients
-                        if self.verb > 0: print(' > NEModel averaged gradients (%s)' % self['gradients'][0].device)
+                        if self.verb > 0: print(f' > NEModel averaged gradients ({self["gradients"][0].device})')
 
                 # build OPT graph
                 with tf.variable_scope('OPT', reuse=tf.AUTO_REUSE):
 
-                    if self.verb > 0: print('\nBuilding OPT graph for %s model @device: %s' % (self['name'], devices[0]))
+                    if self.verb > 0: print(f'\nBuilding OPT graph for {self["name"]} model @device: {devices[0]}')
                     with tf.device(devices[0]):
 
                         self['g_step'] = tf.get_variable(  # global step
@@ -333,7 +343,7 @@ class NEModel(dict):
                         # select OPT vars
                         saver_vars['opt_vars'] = tf.global_variables(scope=tf.get_variable_scope().name)
                         if self.verb > 0:
-                            print(' ### opt_vars: %d floats: %s (%s)' % (len(saver_vars['opt_vars']), short_scin(num_var_floats(saver_vars['opt_vars'])), saver_vars['opt_vars'][0].device))
+                            print(f' ### opt_vars: {len(saver_vars["opt_vars"])} floats: {short_scin(num_var_floats(saver_vars["opt_vars"]))} ({saver_vars["opt_vars"][0].device})')
                             if self.verb > 1: log_vars(saver_vars['opt_vars'])
 
         config = tf.ConfigProto(allow_soft_placement=True)
@@ -363,7 +373,7 @@ class NEModel(dict):
             #graph=          self.graph, # you can call add_graph() later
             flush_secs=     10)
 
-        if self.verb > 0: print('%s (NEModel) build finished!'%self['name'])
+        if self.verb > 0: print(f'{self["name"]} (NEModel) build finished!')
         if self.verb > 2: print(self)
 
     def __str__(self): return ParaDict.dict_2str(self)
