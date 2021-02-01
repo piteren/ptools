@@ -122,7 +122,7 @@ class NEModel(dict):
 
         # model folder and logger
         self.model_FD = f'{save_TFD}/{resolved_name}'
-        if not os.path.isdir(self.model_FD): os.mkdir(self.model_FD)
+        if not os.path.isdir(self.model_FD): os.makedirs(self.model_FD, exist_ok=True)
         if do_log: set_logger(logFD=self.model_FD, custom_name=resolved_name, verb=self.verb)
 
         # read mdict file from folder (last saved model parameters)

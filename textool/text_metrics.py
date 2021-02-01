@@ -7,7 +7,7 @@
 import nltk
 import rouge
 
-from ptools.textool.tokenization import tokenize_words
+from ptools.textool.tokenization import whitspace_tokenizer
 from ptools.neuralmess.vext.gpt_encoder.bpencoder import get_encoder
 
 
@@ -35,8 +35,8 @@ def lev_distL(source :list or str, target :list or str):
             cost = 0 if source[i] == target[j] else 1
             dist[i + 1][j + 1] = min(dist[i][j + 1] + 1,    # delete
                                      dist[i + 1][j] + 1,    # insert
-                                     dist[i][j] + cost      # substitute
-            )
+                                     dist[i][j] + cost)     # substitute
+
     return dist[-1][-1]
 
 # returns bpe-tokens-Levenshtein-distance of two strings
@@ -50,11 +50,12 @@ def bleu(
         ref :list or str,
         ngram=      None,                   # set to 1,2,3,4 to override weights
         weights=    (0.25,0.25,0.25,0.25)):
+
     if type(ref) is str: ref = [ref]
     reft = []
     for r in ref:
-        reft.append(tokenize_words(r))
-    cndt = tokenize_words(sen)
+        reft.append(whitspace_tokenizer(r))
+    cndt = whitspace_tokenizer(sen)
 
     if ngram:
         if ngram == 1: weights = (1,  0,    0,   0)
@@ -62,7 +63,7 @@ def bleu(
         if ngram == 3: weights = (0.33,0.33,0.33,0)
 
     sb = 0
-    try: sb = nltk.translate.bleu_score.sentence_bleu(reft,cndt,weights=weights)
+    try: sb = nltk.translate.bleu_score.sentence_bleu(reft, cndt, weights=weights)
     except ValueError: pass
 
     return sb
@@ -100,8 +101,8 @@ def two_most_distanced(sa :str,sb :str,sc :str):
 
 if __name__ == '__main__':
 
-    sen = 'My name is Piotr and I like to work for Samsung today with Majka.'
-    ref = 'Her name is Majka and she works for Samsung too.'
+    sen = 'My name is Piotr and I like to work with Andrey today.'
+    ref = 'His name is Andrey and he works for this company too.'
 
     print('lev_dist:  %s'%lev_dist(sen,ref))
     print('Bleu:      %s'%bleu(sen,ref))

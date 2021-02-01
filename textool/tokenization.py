@@ -4,8 +4,6 @@
 
 """
 
-import nltk
-import spacy
 import string
 
 
@@ -25,36 +23,8 @@ def whitspace_tokenizer(text):
 
 # whitespace tokenizer
 def whitspace_normalize(text):
-    text_list = text.split()
+    text_list = whitspace_tokenizer(text)
     return ' '.join(text_list)
-
-# spacy word tokenizer
-def spacy_Wtokenizer(text, nlp: spacy.component):
-    tokens = nlp.tokenizer(text)
-    return [w.text for w in tokens]
-
-# spacy sentence tokenizer
-def spacy_Stokenizer(text, nlp: spacy.component):
-    tokens = nlp(text).sents
-    return [s.text for s in tokens]
-
-# word tokenization method, supports 'spacy', 'nltk', for other 'space'
-def tokenize_words(
-        text,
-        tokenizer=  'spacy'):
-
-    if tokenizer == 'spacy':    return spacy_Wtokenizer(text)
-    if tokenizer == 'nltk':     return nltk.word_tokenize(text)
-    return whitspace_tokenizer(text)
-
-# sentence tokenization method
-def tokenize_sentences(
-        text,
-        tokenizer=  'spacy'):
-
-    assert tokenizer in ['spacy','nltk']
-    if tokenizer == 'spacy': return spacy_Stokenizer(text)
-    return nltk.sent_tokenize(text)
 
 
 if __name__ == '__main__':

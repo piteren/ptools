@@ -44,7 +44,7 @@ def histogram(
     plt.legend(loc='upper right')
     plt.grid(True)
     if save_FD:
-        if not os.path.isdir(save_FD): os.mkdir(save_FD)
+        if not os.path.isdir(save_FD): os.makedirs(save_FD, exist_ok=True)
         plt.savefig(f'{save_FD}/{name}.png')
     else:
         plt.show()

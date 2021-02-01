@@ -4,11 +4,14 @@
 
 """
 
+from typing import List
+
 from ptools.lipytools.plots import histogram
 
 
+# prepares some stats for list of documents, assumes that each document is a list of sentences, uses whs tokenization for words
 def docs_stats(
-        docs: list,
+        docs: List[list],       # list of sentence lists
         print_pd=       True,   # to print stats with pandas
         save_FD :str=   None):  # to save plots to folder
 
